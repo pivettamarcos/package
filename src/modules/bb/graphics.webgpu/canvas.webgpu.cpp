@@ -512,7 +512,7 @@ void WebGPUCanvas::draw2d( WGPUPrimitiveTopology topology,bool blend,WGPUTexture
 
 void WebGPUCanvas::quad( int x,int y,int w,int h,bool solid,bool blend,
                          WGPUTextureView tex,float col[3] ){
-	float xywh[4]={ (float)x,(float)y,(float)w,(float)h };
+    float xywh[4]={ (float)(x+origin_x),(float)(y+origin_y),(float)w,(float)h };
 	float scale[2]={ scale_x,scale_y };
 
 	if( solid ){
@@ -566,9 +566,9 @@ void WebGPUCanvas::plot( int x,int y ){
 }
 
 void WebGPUCanvas::line( int x,int y,int x2,int y2 ){
-	const BBWebGPUVertex verts[2]={
-		{ (float)x,(float)y,0.f,0.f },
-		{ (float)x2,(float)y2,0.f,0.f }
+    const BBWebGPUVertex verts[2]={
+        { (float)(x+origin_x),(float)(y+origin_y),0.f,0.f },
+        { (float)(x2+origin_x),(float)(y2+origin_y),0.f,0.f }
 	};
 	float xywh[4]={ 0.f,0.f,1.f,1.f };
 	float scale[2]={ scale_x,scale_y };
@@ -593,7 +593,7 @@ void WebGPUCanvas::oval( int x,int y,int w,int h,bool solid ){
 
 	std::vector<BBWebGPUVertex> ring;
 	for( int i=0;i<segs;i++ ){
-		BBWebGPUVertex v={ ux*rx+x,uy*ry+y,0.f,0.f };
+        BBWebGPUVertex v={ ux*rx+x+origin_x,uy*ry+y+origin_y,0.f,0.f };
 		ring.push_back( v );
 
 		t=ux;
@@ -673,8 +673,8 @@ void WebGPUCanvas::text( int x,int y,const std::string &t ){
 	verts.clear();
 	verts.reserve( t.size()*6 );
 
-	float fy=(float)y+font->baseline*font->density;
-	float fx=(float)x;
+    float fy=(float)(y+origin_y)+font->baseline*font->density;
+    float fx=(float)(x+origin_x);
 
 	float awidth=(float)font->atlas->width,aheight=(float)font->atlas->height;
 
@@ -728,7 +728,7 @@ void WebGPUCanvas::blit( int x,int y,BBCanvas *s,int src_x,int src_y,int src_w,i
 
 	float sx0=src_x*sx,sy0=src_y*sy;
 	float sw=src_w*sx,sh=src_h*sy;
-	float dx0=x*dx,dy0=y*dy;
+    float dx0=(x+origin_x)*dx,dy0=(y+origin_y)*dy;
 	float dw=src_w*dx,dh=src_h*dy;
 
 	float srcW=(float)src->getWidth(),srcH=(float)src->getHeight();
@@ -814,7 +814,7 @@ void WebGPUCanvas::blitScaled( int x,int y,int w,int h,BBCanvas *s,int src_x,int
 	float dx,dy;
 	getScale( &dx,&dy );
 
-	float dx0=x*dx,dy0=y*dy;
+    float dx0=(x+origin_x)*dx,dy0=(y+origin_y)*dy;
 	float dw=w*dx,dh=h*dy;
 
 	float srcW=(float)src->getWidth(),srcH=(float)src->getHeight();
@@ -879,7 +879,7 @@ void WebGPUCanvas::image( BBCanvas *c,int x,int y,bool solid ){
 	if( !view ) return;
 
 	float white[3]={ 1.f,1.f,1.f };
-	quad( x-src->handle_x,y-src->handle_y,src->getWidth(),src->getHeight(),true,true,view,white );
+    quad( x-src->handle_x,y-src->handle_y,src->getWidth(),src->getHeight(),true,true,view,white );
 }
 
 void WebGPUCanvas::readPixels( std::vector<unsigned char> &out ){
