@@ -5,7 +5,11 @@
 
 #undef CDECL
 
+#ifdef BB_MSVC
+#define BBDECL
+#else
 #define BBDECL __attribute__((visibility("default")))
+#endif
 #define BBCALL
 #define CDECL
 

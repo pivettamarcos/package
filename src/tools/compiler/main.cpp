@@ -405,9 +405,13 @@ int main( int argc,char *argv[] ){
 
 	std::vector<std::string> rts;
 #ifdef WIN32
-	if( const char *er=enumRuntimes( rts ) ) err( er );
+	if( targetid=="emscripten" ){
+		// Emscripten runtimes are static WebAssembly libraries, not Windows DLLs.
+		// The native compiler can still be built with WIN32 while cross-compiling.
+		rt="opengl";
+	}else if( const char *er=enumRuntimes( rts ) ) err( er );
 
-	if( rtinfo ){
+	if( rtinfo && targetid!="emscripten" ){
 		if( !quiet ) std::cout<<"Found "<<rts.size()<<" runtimes:"<<std::endl;
 		for ( unsigned i=0;i<rts.size();i++ ){
 			std::cout<<rts[i]<<std::endl;
@@ -415,9 +419,9 @@ int main( int argc,char *argv[] ){
 		return 0;
 	}
 
-	if( rt=="" ) rt=rts[0];
+	if( targetid!="emscripten" && rt=="" ) rt=rts[0];
 
-	if( std::find( std::begin(rts),std::end(rts),rt )==std::end(rts) ){
+	if( targetid!="emscripten" && std::find( std::begin(rts),std::end(rts),rt )==std::end(rts) ){
 		err( ("Invalid runtime: "+rt).c_str() );
 	}
 #else
