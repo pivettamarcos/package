@@ -1080,6 +1080,13 @@ static const int kWebGPUModes[][2]={
 	{1280,720},{1920,1080},{2560,1440},{3840,2160},{1600,900},{1366,768},{1024,768},{800,600},{640,480}
 };
 
+// The recovered game performs a legacy 800x600x16 mode check before opening
+// its first window. WebGPU does not use a swap-chain colour depth, so expose
+// that compatibility mode in addition to the normal 32-bit display modes.
+static const int kWebGPUCompatDepthModes[][3]={
+	{800,600,16}
+};
+
 int WebGPUContextDriver::numGraphicsDrivers(){
 	return 1;
 }
@@ -1090,14 +1097,24 @@ void WebGPUContextDriver::graphicsDriverInfo( int driver,std::string *name,int *
 }
 
 int WebGPUContextDriver::numGraphicsModes( int driver ){
-	return (int)(sizeof(kWebGPUModes)/sizeof(kWebGPUModes[0]));
+	return (int)(sizeof(kWebGPUModes)/sizeof(kWebGPUModes[0]))+
+		(int)(sizeof(kWebGPUCompatDepthModes)/sizeof(kWebGPUCompatDepthModes[0]));
 }
 
 void WebGPUContextDriver::graphicsModeInfo( int driver,int mode,int *w,int *h,int *d,int *c ){
 	int n=(int)(sizeof(kWebGPUModes)/sizeof(kWebGPUModes[0]));
 	if( mode<0 ) mode=0;
-	if( mode>=n ) mode=n-1;
-	*w=kWebGPUModes[mode][0];*h=kWebGPUModes[mode][1];*d=32;*c=GFXMODECAPS_3D;
+	if( mode>=n ){
+		int compat=mode-n;
+		int compat_count=(int)(sizeof(kWebGPUCompatDepthModes)/sizeof(kWebGPUCompatDepthModes[0]));
+		if( compat>=compat_count ) compat=compat_count-1;
+		*w=kWebGPUCompatDepthModes[compat][0];
+		*h=kWebGPUCompatDepthModes[compat][1];
+		*d=kWebGPUCompatDepthModes[compat][2];
+	}else{
+		*w=kWebGPUModes[mode][0];*h=kWebGPUModes[mode][1];*d=32;
+	}
+	*c=GFXMODECAPS_3D;
 }
 
 void WebGPUContextDriver::windowedModeInfo( int *c ){
