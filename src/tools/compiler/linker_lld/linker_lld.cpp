@@ -338,15 +338,15 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 	}
 
 	if( target.type=="emscripten" ){
-		const char *webgpu_env=getenv( "SCPCB_WEBGPU" );
+		const char *webgpu_env=getenv( "WEBGPU_ENABLED" );
 		bool webgpu=webgpu_env && std::string(webgpu_env)=="1";
 		std::string emlibdir=libdir;
-		if( const char *p=getenv( "SCPCB_LIB_DIR" ) ) emlibdir=p;
+		if( const char *p=getenv( "WEBGPU_LIB_DIR" ) ) emlibdir=p;
 		std::string obj=exeFile+".o";
 		{ std::ofstream of( obj,std::ios_base::binary ); of.write( mainObj.c_str(),mainObj.size() ); }
-		std::string extra=getenv("SCPCB_EMCC_EXTRA")?getenv("SCPCB_EMCC_EXTRA"):"";
+		std::string extra=getenv("WEBGPU_EMCC_EXTRA")?getenv("WEBGPU_EMCC_EXTRA"):"";
 		std::string cmd="emcc \""+obj+"\" ";
-		if( getenv("SCPCB_COMPAT_OBJ") ) cmd+=std::string("\"")+getenv("SCPCB_COMPAT_OBJ")+"\" ";
+		if( getenv("WEBGPU_COMPAT_OBJ") ) cmd+=std::string("\"")+getenv("WEBGPU_COMPAT_OBJ")+"\" ";
 		cmd+="-L\""+emlibdir+"\" ";
 		cmd+="-Wl,--start-group ";
 		for( auto lib:libs ){

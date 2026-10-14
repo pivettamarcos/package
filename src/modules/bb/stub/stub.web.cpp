@@ -42,10 +42,10 @@ public:
 };
 
 static bool webDebugEnabled(){
-	if( getenv( "SCPCB_RT_DEBUG" ) ) return true;
+	if( getenv( "WEBGPU_RT_DEBUG" ) ) return true;
 	return EM_ASM_INT({
 		try{
-			if( typeof Module!=='undefined' && Module['SCPCB_DEBUG'] ) return 1;
+			if( typeof Module!=='undefined' && Module['WEBGPU_DEBUG'] ) return 1;
 			if( typeof location!=='undefined' && /[?&]debug=1/.test( location.search ) ) return 1;
 		}catch(e){}
 		return 0;
