@@ -72,6 +72,12 @@ void StmtSeqNode::translate( Codegen *g ){
 void StmtSeqNode::translate2( Codegen_LLVM *g ) {
 	std::string t=fileLabel;
 	fileLabel=file.size() ? file : "";
+	auto previousLocation=g->builder->getCurrentDebugLocation();
+	if( g->debug ){
+		size_t slash=file.find_last_of("/\\");
+		auto unit=g->dbgBuilder->createFile( file.substr(slash+1),slash==std::string::npos ? "." : file.substr(0,slash) );
+		g->dbgBlocks.push_back( g->dbgBuilder->createLexicalBlockFile(g->dbgBlocks.back(),unit) );
+	}
 	for( int k=0;k<stmts.size();++k ){
 		StmtNode *stmt=stmts[k];
 		stmt->debug2( stmts[k]->pos,g );
@@ -84,6 +90,8 @@ void StmtSeqNode::translate2( Codegen_LLVM *g ) {
 			throw;
 		}
 	}
+	if( g->debug ) g->dbgBlocks.pop_back();
+	g->builder->SetCurrentDebugLocation( previousLocation );
 	fileLabel=t;
 }
 #endif

@@ -179,7 +179,7 @@ json ProgNode::toJSON( Environ *e ){
 void ProgNode::translate2( Codegen_LLVM *g,const std::vector<UserFunc> &userfuncs ){
 	std::string filepath=stmts->file; // TODO: should make this absolute
 	size_t slash_idx=filepath.find_last_of("/\\");
-	std::string filedir=filepath.substr( 0,slash_idx );
+	std::string filedir=slash_idx==std::string::npos ? "." : filepath.substr( 0,slash_idx );
 	std::string filename=filepath.substr( slash_idx+1 );
 
 	g->module->setModuleIdentifier( filepath );
@@ -241,6 +241,7 @@ void ProgNode::translate2( Codegen_LLVM *g,const std::vector<UserFunc> &userfunc
 	funcs->translate2( g );
 
 	g->builder->SetInsertPoint( block );
+	g->builder->SetCurrentDebugLocation( llvm::DebugLoc() );
 
 	for( auto &fx : g->data_str_fixups ){
 		llvm::Value *idx[2]={ g->constantInt( 0 ),

@@ -67,6 +67,16 @@ void FuncDeclNode::translate2( Codegen_LLVM *g ){
 	auto func=sem_type->llvmFunction( ident,g );
 	auto block = llvm::BasicBlock::Create( *g->context,"entry",func );
 	g->builder->SetInsertPoint( block );
+	g->builder->SetCurrentDebugLocation( llvm::DebugLoc() );
+	if( g->debug ){
+		size_t slash=file.find_last_of("/\\");
+		auto unit=g->dbgBuilder->createFile( file.substr(slash+1),slash==std::string::npos ? "." : file.substr(0,slash) );
+		auto signature=g->dbgBuilder->createSubroutineType( g->dbgBuilder->getOrCreateTypeArray({}) );
+		unsigned line=(pos>>16)&0xffff;
+		auto scope=g->dbgBuilder->createFunction( unit,ident,func->getName(),unit,line,signature,line,llvm::DINode::FlagPrototyped,llvm::DISubprogram::SPFlagDefinition );
+		func->setSubprogram( scope );
+		g->dbgBlocks.push_back( scope );
+	}
 
 	for( int k=0;k<sem_type->params->size();k++ ){
 		Decl *d=sem_env->decls->decls[k];
@@ -82,6 +92,8 @@ void FuncDeclNode::translate2( Codegen_LLVM *g ){
 	if( final_block->size()==0 ){
 		final_block->eraseFromParent();
 	}
+	if( g->debug ) g->dbgBlocks.pop_back();
+	g->builder->SetCurrentDebugLocation( llvm::DebugLoc() );
 }
 #endif
 
