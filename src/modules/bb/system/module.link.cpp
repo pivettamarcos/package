@@ -11,8 +11,14 @@ BBMODULE_LINK( system ){
 	rtSym( "$SystemProperty$property","bbSystemProperty",bbSystemProperty );
 	rtSym( "$GetEnv$env_var","bbGetEnv",bbGetEnv );
 	rtSym( "SetEnv$env_var$value","bbSetEnv",bbSetEnv );
+	rtSym( "$GetClipboardContents","bbGetClipboardContents",bbGetClipboardContents );
+	rtSym( "SetClipboardContents$contents","bbSetClipboardContents",bbSetClipboardContents );
 	rtSym( "%ScreenWidth%i=-1","bbScreenWidth",bbScreenWidth );
 	rtSym( "%ScreenHeight%i=-1","bbScreenHeight",bbScreenHeight );
+	rtSym( "%DesktopWidth","bbDesktopWidth",bbDesktopWidth );
+	rtSym( "%DesktopHeight","bbDesktopHeight",bbDesktopHeight );
+	rtSym( "%TotalPhys","bbTotalPhys",bbTotalPhys );
+	rtSym( "%AvailPhys","bbAvailPhys",bbAvailPhys );
 	rtSym( "#DPIScaleX","bbDPIScaleX",bbDPIScaleX );
 	rtSym( "#DPIScaleY","bbDPIScaleY",bbDPIScaleY );
 	rtSym( "$CurrentDate","bbCurrentDate",bbCurrentDate );

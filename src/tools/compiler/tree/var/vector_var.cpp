@@ -52,7 +52,7 @@ llvm::Value *VectorVarNode::translate2( Codegen_LLVM *g ){
 		// if( g->debug ){
 		// 	p=jumpge( p,iconst( vec_type->sizes[k] ),"__bbVecBoundsEx" );
 		// }
-		p=g->builder->CreateMul( p,llvm::ConstantInt::get( *g->context,llvm::APInt( 64,sz ) ) );
+		p=g->builder->CreateMul( p,llvm::ConstantInt::get( g->intTy,sz ) );
 
 		sz=sz*vec_type->sizes[k]/4;
 		t=t ? g->builder->CreateAdd( t,p ) : p;

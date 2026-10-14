@@ -28,6 +28,10 @@ BBMODULE_LINK( blitz3d ){
 	rtSym( "%LoadAnimTexture$file%flags%width%height%first%count","bbLoadAnimTexture",bbLoadAnimTexture );
 	rtSym( "FreeTexture%texture","bbFreeTexture",bbFreeTexture );
 	rtSym( "TextureBlend%texture%blend","bbTextureBlend",bbTextureBlend );
+	rtSym( "TextureBumpEnvMat%texture%x%y#envmat","bbTextureBumpEnvMat",bbTextureBumpEnvMat );
+	rtSym( "TextureBumpEnvScale%texture#envscale","bbTextureBumpEnvScale",bbTextureBumpEnvScale );
+	rtSym( "TextureBumpEnvOffset%texture#envoffset","bbTextureBumpEnvOffset",bbTextureBumpEnvOffset );
+	rtSym( "TextureLodBias#bias","bbTextureLodBias",bbTextureLodBias );
 	rtSym( "TextureCoords%texture%coords","bbTextureCoords",bbTextureCoords );
 	rtSym( "ScaleTexture%texture#u_scale#v_scale","bbScaleTexture",bbScaleTexture );
 	rtSym( "RotateTexture%texture#angle","bbRotateTexture",bbRotateTexture );

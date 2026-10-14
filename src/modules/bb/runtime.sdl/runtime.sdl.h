@@ -2,8 +2,12 @@
 #define BB_RUNTIME_SDL_H
 
 #include <bb/runtime/runtime.h>
+#ifdef BB_WEBGPU
+#include <bb/graphics.webgpu/graphics.webgpu.h>
+#else
 #include <bb/graphics.sdl/graphics.sdl.h>
 #include <bb/blitz3d.gl/blitz3d.gl.h>
+#endif
 
 #include <SDL.h>
 

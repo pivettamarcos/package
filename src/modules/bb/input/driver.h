@@ -4,7 +4,6 @@
 #include "device.h"
 
 class BBInputDriver{
-  /***** GX INTERFACE *****/
 public:
   virtual ~BBInputDriver(){}
 

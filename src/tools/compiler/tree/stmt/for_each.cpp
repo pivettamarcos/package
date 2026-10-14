@@ -63,7 +63,7 @@ void ForEachNode::translate2( Codegen_LLVM *g ){
 	auto loop=llvm::BasicBlock::Create( *g->context,"foreach_loop",func );
 	auto cont=llvm::BasicBlock::Create( *g->context,"foreach_cont",func );
 
-	auto ity=llvm::Type::getInt64Ty( *g->context );
+	auto ity=g->intTy;
 	auto bty=llvm::Type::getInt1Ty( *g->context );
 
 	l=g->builder->CreateBitOrPointerCast( var->translate2( g ),g->bbObjPtr );

@@ -16,7 +16,6 @@ public:
 	MeshCollider( const std::vector<Vertex> &verts,const std::vector<Triangle> &tris );
 	~MeshCollider();
 
-	//sphere collision
 	bool collide( const Line &line,float radius,Collision *curr_coll,const Transform &tform );
 
 	bool intersects( const MeshCollider &c,const Transform &t )const;

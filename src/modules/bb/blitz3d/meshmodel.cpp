@@ -165,14 +165,6 @@ MeshModel::MeshModel( const MeshModel &t ):Model( t ),
 rep( t.rep ),brush_changes( rep->brush_changes-1 ){
 	++rep->ref_cnt;
 	surf_bones.resize( t.surf_bones.size() );
-	/*
-	if( t.surf_bones.size() ){
-		surf_bones.resize( t.surf_bones.size() );
-		if( rep->bone_tforms.size() ){
-			setRenderSpace( RENDER_SPACE_WORLD );
-		}
-	}
-	*/
 }
 
 MeshModel::~MeshModel(){
@@ -233,7 +225,6 @@ bool MeshModel::render( const RenderContext &rc ){
 		return false;
 	}
 
-	//OK, its boned!
 	const std::vector<Object*> &bones=getAnimator()->getObjects();
 
 	for( unsigned int k=0;k<bones.size();++k ){
@@ -273,7 +264,6 @@ void MeshModel::renderQueue( int type ){
 
 Surface *MeshModel::createSurface( const Brush &b ){
 	return rep->createSurface( b );
-	--brush_changes;
 }
 
 void MeshModel::flipTriangles(){

@@ -10,7 +10,6 @@ public:
 	Mirror( const Mirror &t );
 	~Mirror();
 
-	//Entity interface
 	Entity *clone(){ return d_new Mirror( *this ); }
 	Mirror *getMirror(){ return this; }
 };

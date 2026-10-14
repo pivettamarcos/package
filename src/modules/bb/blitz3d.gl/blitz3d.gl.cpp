@@ -5,15 +5,13 @@
 #include "blitz3d.gl.h"
 #include "default.glsl.h"
 
-#include <iostream>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <vector>
 
-//degrees to radians and back
 static const float dtor=0.0174532925199432957692369076848861f;
 static const float rtod=1/dtor;
-
-#if defined(BB_MOBILE) || defined(BB_OVR) || defined(BB_NX)
-#define GLES
-#endif
 
 class GLLight : public BBLightRep{
 public:
@@ -65,7 +63,13 @@ public:
 	unsigned int vertex_array=0;
 	unsigned int vertex_buffer=0,index_buffer=0;
 
-	GLMesh( int mv,int mt,int f ):max_verts(mv),max_tris(mt),flags(f){
+	bool vbuf_alloc=false;
+	int dirty_lo,dirty_hi=-1;
+	unsigned int geom_gen=1;
+	unsigned int up_gen=0;
+	int up_ft=-1,up_tc=-1,up_bv=-1;
+
+	GLMesh( int mv,int mt,int f ):max_verts(mv),max_tris(mt),flags(f),dirty_lo(mv){
 		GL( glGenVertexArrays( 1,&vertex_array ) );
 		GL( glGenBuffers( 1,&vertex_buffer ) );
 		GL( glGenBuffers( 1,&index_buffer ) );
@@ -96,7 +100,6 @@ public:
 	}
 
 	bool lock( bool all ){
-		// TODO: this should probably come from a pool
 		if( !verts ) verts=new GLVertex[max_verts];
 		if( !tris ) tris=new unsigned int[max_tris*3];
 
@@ -104,31 +107,45 @@ public:
 	}
 
 	void unlock(){
-#ifndef GLES
-		GL( glBindBuffer( GL_ARRAY_BUFFER,vertex_buffer ) );
-		GL( glBufferData( GL_ARRAY_BUFFER,max_verts*sizeof(GLVertex),verts,GL_STATIC_DRAW ) );
-#endif
+		if( dirty_hi>=dirty_lo || !vbuf_alloc ){
+			GL( glBindBuffer( GL_ARRAY_BUFFER,vertex_buffer ) );
+			if( !vbuf_alloc ){
+				GL( glBufferData( GL_ARRAY_BUFFER,(size_t)max_verts*sizeof(GLVertex),verts,GL_STATIC_DRAW ) );
+				vbuf_alloc=true;
+			}else{
+				GL( glBufferSubData( GL_ARRAY_BUFFER,(size_t)dirty_lo*sizeof(GLVertex),(size_t)(dirty_hi-dirty_lo+1)*sizeof(GLVertex),verts+dirty_lo ) );
+			}
+			GL( glBindBuffer( GL_ARRAY_BUFFER,0 ) );
+		}
+		dirty_lo=max_verts;dirty_hi=-1;
+		++geom_gen;
 	}
 
-	void offsetIndices( int offset ){
+	void uploadIndices( int first_tri,int tri_cnt,int base_vert ){
+		if( up_gen==geom_gen && up_ft==first_tri && up_tc==tri_cnt && up_bv==base_vert ) return;
 		GL( glBindBuffer( GL_ELEMENT_ARRAY_BUFFER,index_buffer ) );
-		GL( glBufferData( GL_ELEMENT_ARRAY_BUFFER,(max_tris-offset)*3*sizeof(unsigned int),tris+offset*3,GL_STATIC_DRAW ) );
-	}
-
-	void offsetArrays( int offset ){
-		GL( glBindBuffer( GL_ARRAY_BUFFER,vertex_buffer ) );
-		GL( glBufferData( GL_ARRAY_BUFFER,(max_verts-offset)*sizeof(GLVertex),verts+offset,GL_STATIC_DRAW ) );
+		const unsigned int *src=tris+(size_t)first_tri*3;
+		if( base_vert==0 ){
+			GL( glBufferData( GL_ELEMENT_ARRAY_BUFFER,(size_t)tri_cnt*3*sizeof(unsigned int),src,GL_STATIC_DRAW ) );
+		}else{
+			static std::vector<unsigned int> scratch;
+			if( scratch.size()<(size_t)tri_cnt*3 ) scratch.resize( (size_t)tri_cnt*3 );
+			for( size_t i=0;i<(size_t)tri_cnt*3;++i ) scratch[i]=src[i]+(unsigned int)base_vert;
+			GL( glBufferData( GL_ELEMENT_ARRAY_BUFFER,(size_t)tri_cnt*3*sizeof(unsigned int),scratch.data(),GL_STATIC_DRAW ) );
+		}
+		GL( glBindBuffer( GL_ELEMENT_ARRAY_BUFFER,0 ) );
+		up_gen=geom_gen;up_ft=first_tri;up_tc=tri_cnt;up_bv=base_vert;
 	}
 
 	void setVertex( int n,const void *_v ){
 		const Surface::Vertex *v=(const Surface::Vertex*)_v;
 		float coords[3]={ v->coords.x,v->coords.y,v->coords.z };
 		float normal[3]={ v->normal.x,v->normal.y,v->normal.z };
-		setVertex( n,coords,normal,0xffffff,v->tex_coords );
+		setVertex( n,coords,normal,v->color,v->tex_coords );
 	}
 
 	void setVertex( int n,const float coords[3],const float normal[3],const float tex_coords[2][2] ){
-		setVertex( n,coords,normal,0xffffff,tex_coords );
+		setVertex( n,coords,normal,0xffffffff,tex_coords );
 	}
 
 	void setVertex( int n,const float coords[3],const float normal[3],unsigned argb,const float tex_coords[2][2] ){
@@ -136,7 +153,9 @@ public:
 		verts[n].normal[0]=normal[0];verts[n].normal[1]=normal[1];verts[n].normal[2]=normal[2];
 		verts[n].tex_coord0[0]=tex_coords[0][0];verts[n].tex_coord0[1]=tex_coords[0][1];
 		verts[n].tex_coord1[0]=tex_coords[1][0];verts[n].tex_coord1[1]=tex_coords[1][1];
-		verts[n].color[0]=((argb>>16)&255)/255.0;verts[n].color[1]=((argb>>8)&255)/255.0;verts[n].color[2]=(argb&255)/255.0;verts[n].color[3]=((argb>>24)&255)/255.0;
+		verts[n].color[0]=((argb>>16)&255)/255.0f;verts[n].color[1]=((argb>>8)&255)/255.0f;verts[n].color[2]=(argb&255)/255.0f;verts[n].color[3]=((argb>>24)&255)/255.0f;
+		if( n<dirty_lo ) dirty_lo=n;
+		if( n>dirty_hi ) dirty_hi=n;
 	}
 
 	void setTriangle( int n,int v0,int v1,int v2 ){
@@ -146,14 +165,15 @@ public:
 	}
 };
 
-// TODO: merge this with GLLight...
 struct LightState{
 	struct LightData{
 		float mat[16];
 		float color[4];
+		float params[4];
 	} data[8];
 
 	int lights_used;
+	int _pad[3];
 };
 
 struct UniformState{
@@ -174,6 +194,8 @@ struct UniformState{
 	int fullbright;
 	int fog_mode;
 	int alpha_test;
+	float alpha_ref;
+	float _pad[3];
 };
 
 class GLScene : public BBScene{
@@ -181,17 +203,24 @@ private:
 	int context_width,context_height;
 	bool wireframe;
 	UniformState us={ 0 };
+	UniformState last_us={ 0 };
+	bool us_valid=false;
 	GLuint defaultProgram=0;
 	int viewport[4];
 
-	std::vector<GLLight*> lights;
+	GLuint light_ubo=0,rs_ubo=0;
+	GLint loc_proj=-1,loc_view=-1,loc_world=-1;
 
-	float view_matrix[16];
+	GLuint bound_tex[MAX_TEXTURES]={ 0 };
+	unsigned char bound_kind[MAX_TEXTURES]={ 0 };
+
+	int tris_drawn=0;
+
+	std::vector<GLLight*> lights;
 
 	void setLights(){
 		LightState ls={ 0 };
 
-		// FIXME: replace hardcoded '8' with proper hardware-backed value.
 		for( unsigned long i=0;i<8;i++ ){
 			if( i>=lights.size() ){
 				break;
@@ -202,42 +231,22 @@ private:
 			memcpy( ls.data[i].mat,lights[i]->matrix,sizeof(ls.data[i].mat) );
 			ls.data[i].color[0]=lights[i]->r;ls.data[i].color[1]=lights[i]->g;ls.data[i].color[2]=lights[i]->b;ls.data[i].color[3]=1.0;
 
-			float z=1.0f,w=0.0f;
-			if( lights[i]->type!=Light::LIGHT_DISTANT ){
-				z=0.0f;
-				w=1.0f;
-			}
-
-			float pos[]={ 0.0,0.0,z,w };
-			// glLightfv( GL_LIGHT0+i,GL_POSITION,pos );
-
-			if( lights[i]->type!=Light::LIGHT_DISTANT ){
-				float light_range[]={ 0.0f };
-				float range[]={ lights[i]->range };
-				// glLightfv( GL_LIGHT0+i,GL_CONSTANT_ATTENUATION,light_range );
-				// glLightfv( GL_LIGHT0+i,GL_LINEAR_ATTENUATION,range );
-			}
-
-			if( lights[i]->type==Light::LIGHT_SPOT ){
-				float dir[]={ 0.0f,0.0f,-1.0f };
-				float outer[]={ lights[i]->outer_angle/2.0f };
-				float exponent[]={ 10.0f };
-				// glLightfv( GL_LIGHT0+i,GL_SPOT_DIRECTION,dir );
-				// glLightfv( GL_LIGHT0+i,GL_SPOT_CUTOFF,outer );
-				// glLightfv( GL_LIGHT0+i,GL_SPOT_EXPONENT,exponent );
-			}
+			ls.data[i].params[0]=(float)lights[i]->type;
+			ls.data[i].params[1]=lights[i]->range;
+			ls.data[i].params[2]=cosf( lights[i]->outer_angle*dtor*0.5f );
+			ls.data[i].params[3]=cosf( lights[i]->inner_angle*0.5f );
 		}
 
-		static unsigned int ubo=0;
-		if( ubo==0 ){
-			GL( glGenBuffers( 1,&ubo ) );
-			GL( glBindBuffer( GL_UNIFORM_BUFFER,ubo ) );
-			GL( glBindBufferRange( GL_UNIFORM_BUFFER,1,ubo,0,sizeof(ls) ) );
+		if( light_ubo==0 ){
+			GL( glGenBuffers( 1,&light_ubo ) );
+			GL( glBindBuffer( GL_UNIFORM_BUFFER,light_ubo ) );
+			GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(ls),&ls,GL_DYNAMIC_DRAW ) );
+			GL( glBindBufferRange( GL_UNIFORM_BUFFER,1,light_ubo,0,sizeof(ls) ) );
 		}else{
-			GL( glBindBuffer( GL_UNIFORM_BUFFER,ubo ) );
+			GL( glBindBuffer( GL_UNIFORM_BUFFER,light_ubo ) );
+			GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(ls),&ls,GL_DYNAMIC_DRAW ) );
 		}
 
-		GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(ls),&ls,GL_DYNAMIC_DRAW ) );
 		GL( glBindBuffer( GL_UNIFORM_BUFFER,0 ) );
 	}
 
@@ -252,7 +261,6 @@ public:
 	int  hwTexUnits(){ return MAX_TEXTURES; }
 	int  gfxDriverCaps3D(){ return 110; }
 
-	// intentionally left blank...
 	void setWBuffer( bool enable ){}
 	void setHWMultiTex( bool enable ){}
 	void setDither( bool enable ){}
@@ -314,8 +322,7 @@ public:
 	}
 
 	void setProj( const float matrix[16] ){
-		GLint projLocation=GL( glGetUniformLocation( defaultProgram,"bbProjMatrix" ) );
-		GL( glUniformMatrix4fv( projLocation,1,GL_FALSE,matrix ) );
+		GL( glUniformMatrix4fv( loc_proj,1,GL_FALSE,matrix ) );
 	}
 
 	void setOrthoProj( float nr,float fr,float nr_l,float nr_r,float nr_t,float nr_b ){
@@ -378,8 +385,7 @@ public:
 			mat[12]=m->elements[3][0]; mat[13]=m->elements[3][1]; mat[14]=-m->elements[3][2];
 		}
 
-		GLint viewLocation=GL( glGetUniformLocation( defaultProgram,"bbViewMatrix" ) );
-		GL( glUniformMatrix4fv( viewLocation,1,GL_FALSE,mat ) );
+		GL( glUniformMatrix4fv( loc_view,1,GL_FALSE,mat ) );
 	}
 
 	void setWorldMatrix( const Matrix *matrix ){
@@ -398,21 +404,16 @@ public:
 			mat[12]=m->elements[3][0];  mat[13]=m->elements[3][1]; mat[14]=m->elements[3][2];
 		}
 
-		GLint worldLocation=GL( glGetUniformLocation( defaultProgram,"bbWorldMatrix" ) );
-		GL( glUniformMatrix4fv( worldLocation,1,GL_FALSE,mat ) );
+		GL( glUniformMatrix4fv( loc_world,1,GL_FALSE,mat ) );
 	}
 
 	void setRenderState( const RenderState &rs ){
 		if( rs.fx&FX_ALPHATEST && !(rs.fx&FX_VERTEXALPHA) ){
 			us.alpha_test = 1;
+			us.alpha_ref = 128.0f*rs.alpha;
 		} else {
 			us.alpha_test = 0;
-		}
-
-		if( rs.fx&FX_FLATSHADED ){
-			// TODO
-		} else {
-			// TODO
+			us.alpha_ref = 0.0f;
 		}
 
 		int fog_mode=us.fog_mode;
@@ -428,10 +429,7 @@ public:
 
 		int blend=rs.blend;
 
-		// glShadeModel( rs.fx&FX_FLATSHADED ? GL_FLAT : GL_SMOOTH );
-
-		// TODO: sort this out for ES
-#ifndef GLES
+#ifndef BB_EMSCRIPTEN
 		if( rs.fx&FX_WIREFRAME||wireframe ){
 			GL( glPolygonMode(GL_FRONT_AND_BACK,GL_LINE) );
 		}else{
@@ -445,84 +443,114 @@ public:
 		us.fullbright=rs.fx&FX_FULLBRIGHT;
 		us.use_vertex_color=rs.fx&FX_VERTEXCOLOR;
 
-		for( int i=0;i<MAX_TEXTURES;i++ ){
-			GL( glActiveTexture( GL_TEXTURE0+i ) );
-			GL( glBindTexture( GL_TEXTURE_2D,0 ) );
+		GLCanvas *canv[MAX_TEXTURES];
+		int cflags[MAX_TEXTURES];
+		const RenderState::TexState *tsp[MAX_TEXTURES];
+		GLuint ids[MAX_TEXTURES];
+		bool any_upload=false;
+		int cnt=0;
 
-			GL( glActiveTexture( GL_TEXTURE0+i+8 ) );
-			GL( glBindTexture( GL_TEXTURE_CUBE_MAP,0 ) );
-		}
-
-		us.texs_used=0;
 		for( int i=0;i<MAX_TEXTURES;i++ ){
 			const RenderState::TexState &ts=rs.tex_states[i];
 
-			if( !ts.canvas ){
-				GL( glActiveTexture( GL_TEXTURE0+i ) );
-				GL( glBindTexture( GL_TEXTURE_2D,0 ) );
+			if( !ts.canvas || !ts.blend ) continue;
 
-				GL( glActiveTexture( GL_TEXTURE0+MAX_TEXTURES+i ) );
-				GL( glBindTexture( GL_TEXTURE_CUBE_MAP,0 ) );
+			GLCanvas *canvas=(GLCanvas*)ts.canvas;
+			int flags=canvas->getFlags();
+
+			if( (ts.blend==BLEND_MULTIPLY || ts.blend==BLEND_MULTIPLY2) &&
+				(flags&BBCanvas::CANVAS_TEX_VIDMEM) && (flags&BBCanvas::CANVAS_TEXTURE) &&
+				canvas->getWidth()<=2 && canvas->getHeight()<=2 ){
 				continue;
 			}
 
-			GLCanvas *canvas=(GLCanvas*)ts.canvas;
+			if( canvas->isDirty() ) any_upload=true;
+			ids[cnt]=canvas->textureId();
+			canv[cnt]=canvas;
+			cflags[cnt]=flags;
+			tsp[cnt]=&ts;
+			cnt++;
+		}
 
-			if( !canvas ){
-				// ---
-			} else {
-				int flags=ts.canvas->getFlags();
+		if( any_upload ){
+			bound_kind[0]=0;
+			bound_tex[0]=0;
+		}
 
-				if( flags&BBCanvas::CANVAS_TEX_CUBE ){
-					GL( glActiveTexture( GL_TEXTURE0+i ) );
-					GL( glBindTexture( GL_TEXTURE_2D,0 ) );
+		us.texs_used=0;
+		for( int k=0;k<cnt;k++ ){
+			GLCanvas *canvas=canv[k];
+			int flags=cflags[k];
+			const RenderState::TexState &ts=*tsp[k];
+			bool cube=(flags&BBCanvas::CANVAS_TEX_CUBE)!=0;
+			unsigned char kind=cube?2:1;
+			GLenum unit=cube?(GL_TEXTURE0+MAX_TEXTURES+k):(GL_TEXTURE0+k);
 
-					GL( glActiveTexture( GL_TEXTURE0+MAX_TEXTURES+i ) );
-				}else{
-					GL( glActiveTexture( GL_TEXTURE0+MAX_TEXTURES+i ) );
+			bool needbind=bound_kind[k]!=kind || bound_tex[k]!=ids[k];
+
+			int want=((flags&BBCanvas::CANVAS_TEX_NOFILTERING)?1:0)
+				|((flags&BBCanvas::CANVAS_TEX_MIPMAP)?2:0)
+				|((flags&BBCanvas::CANVAS_TEX_CLAMPU)?4:0)
+				|((flags&BBCanvas::CANVAS_TEX_CLAMPV)?8:0);
+			bool needparams=canvas->applied_params!=want;
+
+			if( needbind || needparams ){
+				if( needbind && bound_kind[k]==2 && !cube ){
+					GL( glActiveTexture( GL_TEXTURE0+MAX_TEXTURES+k ) );
 					GL( glBindTexture( GL_TEXTURE_CUBE_MAP,0 ) );
-
-					GL( glActiveTexture( GL_TEXTURE0+i ) );
+				}else if( needbind && bound_kind[k]==1 && cube ){
+					GL( glActiveTexture( GL_TEXTURE0+k ) );
+					GL( glBindTexture( GL_TEXTURE_2D,0 ) );
 				}
-
-				canvas->bind();
-
-				float mat[16]={
-					1.0,0.0, 0.0,0.0,
-					0.0,1.0, 0.0,0.0,
-					0.0,0.0,-1.0,0.0,
-					0.0,0.0, 0.0,1.0
-				};
-
-				const Matrix *m=ts.matrix;
-				if( m ){
-					mat[ 0]=m->elements[0][0]; mat[ 1]=m->elements[0][1]; mat[ 2]=-m->elements[0][2];
-					mat[ 4]=m->elements[1][0]; mat[ 5]=m->elements[1][1]; mat[ 6]=-m->elements[1][2];
-					mat[ 8]=m->elements[2][0]; mat[ 9]=m->elements[2][1]; mat[10]=-m->elements[2][2];
-					mat[12]=m->elements[3][0]; mat[13]=m->elements[3][1]; mat[14]=-m->elements[3][2];
+				GL( glActiveTexture( unit ) );
+				if( needbind ){
+					GL( glBindTexture( canvas->target,ids[k] ) );
+					bound_kind[k]=kind;
+					bound_tex[k]=ids[k];
 				}
-
-				memcpy( us.texs[us.texs_used].mat,mat,sizeof(mat) );
-
-				bool no_filter=flags&BBCanvas::CANVAS_TEX_NOFILTERING;
-				bool mipmap=flags&BBCanvas::CANVAS_TEX_MIPMAP;
-
-				GL( glTexParameteri( canvas->target,GL_TEXTURE_MAG_FILTER,no_filter?GL_NEAREST:GL_LINEAR ) );
-				GL( glTexParameteri( canvas->target,GL_TEXTURE_MIN_FILTER,mipmap?GL_LINEAR_MIPMAP_LINEAR:(no_filter?GL_NEAREST:GL_LINEAR) ) );
-				GL( glTexParameteri( canvas->target,GL_TEXTURE_WRAP_S,flags&BBCanvas::CANVAS_TEX_CLAMPU?GL_CLAMP_TO_EDGE:GL_REPEAT ) );
-				GL( glTexParameteri( canvas->target,GL_TEXTURE_WRAP_T,flags&BBCanvas::CANVAS_TEX_CLAMPV?GL_CLAMP_TO_EDGE:GL_REPEAT ) );
-
-				if( flags&BBCanvas::CANVAS_TEX_ALPHA ){
-					us.alpha_test=1;
-				}
-
-				us.texs[us.texs_used].blend=ts.blend;
-				us.texs[us.texs_used].sphere_map=flags&BBCanvas::CANVAS_TEX_SPHERE?1:0;
-				us.texs[us.texs_used].cube_map=flags&BBCanvas::CANVAS_TEX_CUBE?1:0;
-				us.texs[us.texs_used].flags=ts.flags;
-
-				us.texs_used++;
+				if( needparams ) canvas->applyTexParams( want );
 			}
+
+			float mat[16]={
+				1.0,0.0, 0.0,0.0,
+				0.0,1.0, 0.0,0.0,
+				0.0,0.0,-1.0,0.0,
+				0.0,0.0, 0.0,1.0
+			};
+
+			const Matrix *m=ts.matrix;
+			if( m ){
+				mat[ 0]=m->elements[0][0]; mat[ 1]=m->elements[0][1]; mat[ 2]=-m->elements[0][2];
+				mat[ 4]=m->elements[1][0]; mat[ 5]=m->elements[1][1]; mat[ 6]=-m->elements[1][2];
+				mat[ 8]=m->elements[2][0]; mat[ 9]=m->elements[2][1]; mat[10]=-m->elements[2][2];
+				mat[12]=m->elements[3][0]; mat[13]=m->elements[3][1]; mat[14]=-m->elements[3][2];
+			}
+
+			memcpy( us.texs[us.texs_used].mat,mat,sizeof(mat) );
+
+			if( flags&BBCanvas::CANVAS_TEX_ALPHA ){
+				us.alpha_test=1;
+			}
+
+			us.texs[us.texs_used].blend=ts.blend;
+			us.texs[us.texs_used].sphere_map=flags&BBCanvas::CANVAS_TEX_SPHERE?1:0;
+			us.texs[us.texs_used].cube_map=cube?1:0;
+			us.texs[us.texs_used].flags=ts.flags;
+
+			us.texs_used++;
+		}
+
+		for( int k=cnt;k<MAX_TEXTURES;k++ ){
+			if( !bound_kind[k] ) continue;
+			if( bound_kind[k]==1 ){
+				GL( glActiveTexture( GL_TEXTURE0+k ) );
+				GL( glBindTexture( GL_TEXTURE_2D,0 ) );
+			}else{
+				GL( glActiveTexture( GL_TEXTURE0+MAX_TEXTURES+k ) );
+				GL( glBindTexture( GL_TEXTURE_CUBE_MAP,0 ) );
+			}
+			bound_kind[k]=0;
+			bound_tex[k]=0;
 		}
 
 		switch( blend ){
@@ -543,28 +571,27 @@ public:
 			break;
 		}
 
-		static unsigned int ubo=0;
-		if( ubo==0 ){
-			GL( glGenBuffers( 1,&ubo ) );
-			GL( glBindBuffer( GL_UNIFORM_BUFFER,ubo ) );
-			GL( glBindBufferRange( GL_UNIFORM_BUFFER,2,ubo,0,sizeof(us) ) );
-		}else{
-			GL( glBindBuffer( GL_UNIFORM_BUFFER,ubo ) );
+		if( !us_valid || memcmp( &us,&last_us,sizeof(us) )!=0 ){
+			if( rs_ubo==0 ){
+				GL( glGenBuffers( 1,&rs_ubo ) );
+				GL( glBindBuffer( GL_UNIFORM_BUFFER,rs_ubo ) );
+				GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(us),&us,GL_DYNAMIC_DRAW ) );
+				GL( glBindBufferRange( GL_UNIFORM_BUFFER,2,rs_ubo,0,sizeof(us) ) );
+			}else{
+				GL( glBindBuffer( GL_UNIFORM_BUFFER,rs_ubo ) );
+				GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(us),&us,GL_DYNAMIC_DRAW ) );
+			}
+			GL( glBindBuffer( GL_UNIFORM_BUFFER,0 ) );
+			memcpy( &last_us,&us,sizeof(us) );
+			us_valid=true;
 		}
 
-		GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(us),&us,GL_DYNAMIC_DRAW ) );
-		GL( glBindBuffer( GL_UNIFORM_BUFFER,0 ) );
-
-		// restore
 		us.fog_mode=fog_mode;
 	}
 
-	//rendering
 	bool begin( const std::vector<BBLightRep*> &l ){
 		if( !glIsProgram( defaultProgram ) ){
 			GL( glUseProgram( 0 ) );
-
-			// LOGD( "rebuilding shader...\n" );
 
 			std::string src( DEFAULT_GLSL,DEFAULT_GLSL+DEFAULT_GLSL_SIZE );
 			defaultProgram=_bbGLCompileProgram( "default.glsl",src );
@@ -593,6 +620,17 @@ public:
 
 			GLint renderIdx=GL( glGetUniformBlockIndex( defaultProgram,"BBRenderState" ) );
 			GL( glUniformBlockBinding( defaultProgram,renderIdx,2 ) );
+
+			loc_proj=GL( glGetUniformLocation( defaultProgram,"bbProjMatrix" ) );
+			loc_view=GL( glGetUniformLocation( defaultProgram,"bbViewMatrix" ) );
+			loc_world=GL( glGetUniformLocation( defaultProgram,"bbWorldMatrix" ) );
+
+			if( light_ubo ){
+				GL( glBindBufferRange( GL_UNIFORM_BUFFER,1,light_ubo,0,sizeof(LightState) ) );
+			}
+			if( rs_ubo ){
+				GL( glBindBufferRange( GL_UNIFORM_BUFFER,2,rs_ubo,0,sizeof(UniformState) ) );
+			}
 		}
 
 		GL( glUseProgram( defaultProgram ) );
@@ -601,6 +639,10 @@ public:
 		GL( glEnable( GL_CULL_FACE ) );
 
 		GL( glDepthFunc( GL_LEQUAL ) );
+
+		memset( bound_kind,0,sizeof(bound_kind) );
+		memset( bound_tex,0,sizeof(bound_tex) );
+		us_valid=false;
 
 		lights.clear();
 		for( unsigned long i=0;i<l.size();i++ ) lights.push_back( dynamic_cast<GLLight*>(l[i]) );
@@ -623,17 +665,20 @@ public:
 	void render( BBMesh *m,int first_vert,int vert_cnt,int first_tri,int tri_cnt ){
 		GLMesh *mesh=(GLMesh*)m;
 
-		// TODO: there's probably more performance to be found here...
-		mesh->offsetIndices( first_tri );
+#if defined(BB_EMSCRIPTEN)
+		mesh->uploadIndices( first_tri,tri_cnt,first_vert );
 
 		GL( glBindVertexArray( mesh->vertex_array ) );
-#ifdef GLES
-		mesh->offsetArrays( first_vert );
 		GL( glDrawElements( GL_TRIANGLES,tri_cnt*3,GL_UNSIGNED_INT,0 ) );
-#else
-		GL( glDrawElementsBaseVertex( GL_TRIANGLES,tri_cnt*3,GL_UNSIGNED_INT,0,first_vert ) );
-#endif
 		GL( glBindVertexArray( 0 ) );
+#else
+		mesh->uploadIndices( first_tri,tri_cnt,0 );
+
+		GL( glBindVertexArray( mesh->vertex_array ) );
+		GL( glDrawElementsBaseVertex( GL_TRIANGLES,tri_cnt*3,GL_UNSIGNED_INT,0,first_vert ) );
+		GL( glBindVertexArray( 0 ) );
+#endif
+		tris_drawn+=tri_cnt;
 	}
 
 	void end(){
@@ -645,23 +690,24 @@ public:
 
 		GL( glViewport( viewport[0],viewport[1],viewport[2],viewport[3] ) );
 		GL( glScissor( viewport[0],viewport[1],viewport[2],viewport[3] ) );
+
+		GL( glDisable( GL_SCISSOR_TEST ) );
 	}
 
-	//lighting
 	BBLightRep *createLight( int flags ){
 		return d_new GLLight();
 	}
-	void freeLight( BBLightRep *l ){}
+	void freeLight( BBLightRep *l ){
+		delete static_cast<GLLight*>( l );
+	}
 
-	//meshes
 	BBMesh *createMesh( int max_verts,int max_tris,int flags ){
 		BBMesh *mesh=d_new GLMesh( max_verts,max_tris,flags );
 		mesh_set.insert( mesh );
 		return mesh;
 	}
 
-	//info
-	int getTrianglesDrawn()const{ return 0; }
+	int getTrianglesDrawn()const{ return tris_drawn; }
 };
 
 BBScene *GLB3DGraphics::createScene( int w,int h,float d,int flags ){

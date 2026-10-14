@@ -6,20 +6,24 @@
 
 #include <string.h>
 #include <time.h>
-#ifndef BB_WINDOWS
 #include <unistd.h>
 #include <sys/time.h>
+#ifdef BB_EMSCRIPTEN
+#include <emscripten.h>
 #endif
 
-#ifdef BB_MACOS
-#include <CoreServices/CoreServices.h>
-#include <CoreGraphics/CoreGraphics.h>
-#endif
-#ifdef BB_IOS
-extern "C" {
-	int iosScreenWidth();
-	int iosScreenHeight();
-}
+#ifdef BB_EMSCRIPTEN
+EM_ASYNC_JS( char*,bbClipboardReadJS,(void),{
+	try{
+		var text=await navigator.clipboard.readText();
+		var len=lengthBytesUTF8( text )+1;
+		var ptr=_malloc( len );
+		stringToUTF8( text,ptr,len );
+		return ptr;
+	}catch(e){
+		return 0;
+	}
+});
 #endif
 
 static int base_time=0;
@@ -34,59 +38,61 @@ void BBCALL bbRuntimeError( BBStr *str ){
 	RTEX( err );
 }
 
+static std::vector<std::string> bbErrorMsgPool;
+
+void BBCALL bbInitErrorMsgs( bb_int_t number,bb_int_t hasMacro ){
+	bbErrorMsgPool.assign( number,std::string() );
+}
+
+void BBCALL bbSetErrorMsg( bb_int_t pos,BBStr *str ){
+	if( pos>=0 && pos<(bb_int_t)bbErrorMsgPool.size() ) bbErrorMsgPool[pos]=*str;
+	delete str;
+}
+
+void BBCALL bbMemoryAccessViolation(){
+	std::string msg;
+	for( size_t k=0;k<bbErrorMsgPool.size();++k ){
+		if( bbErrorMsgPool[k].empty() ) continue;
+		if( !msg.empty() ) msg+="\n";
+		msg+=bbErrorMsgPool[k];
+	}
+	if( msg.empty() ) msg="MemoryAccessViolation";
+	if( msg.size()>1023 ) msg.resize(1023);
+	static char err[1024];
+	strcpy( err,msg.c_str() );
+	RTEX( err );
+}
+
 bb_int_t BBCALL bbExecFile( BBStr *f ){
 	std::string t=*f;delete f;
 	if( !t.size() ) return false;
-
-	int n=0;
-#ifdef BB_WINDOWS
-	//convert cmd_line to cmd and params
-	std::string cmd=t,params;
-	while( cmd.size() && cmd[0]==' ' ) cmd=cmd.substr( 1 );
-	if( cmd.find( '\"' )==0 ){
-		int n=cmd.find( '\"',1 );
-		if( n!=std::string::npos ){
-			params=cmd.substr( n+1 );
-			cmd=cmd.substr( 1,n-1 );
-		}
-	}else{
-		int n=cmd.find( ' ' );
-		if( n!=std::string::npos ){
-			params=cmd.substr( n+1 );
-			cmd=cmd.substr( 0,n );
-		}
-	}
-	while( params.size() && params[0]==' ' ) params=params.substr( 1 );
-	while( params.size() && params[params.size()-1]==' ' ) params=params.substr( 0,params.size()-1 );
-
-	SetForegroundWindow( GetDesktopWindow() );
-
-	n=(bb_int_t)ShellExecute( GetDesktopWindow(),0,cmd.c_str(),params.size() ? params.c_str() : 0,0,SW_SHOW )>32;
-#else
-	// TODO: ...
-#endif
 	if( !bbRuntimeIdle() ) RTEX( 0 );
-	return n;
+	if( t.compare( 0,7,"http://" )==0||t.compare( 0,8,"https://" )==0 ){
+		EM_ASM( { window.open( UTF8ToString( $0 ),'_blank','noopener' ); },t.c_str() );
+		return 1;
+	}
+	return 0;
 }
 
 void BBCALL bbDelay( bb_int_t ms ){
+#ifdef BB_EMSCRIPTEN
+	if( !bbRuntimeIdle() ) RTEX( 0 );
+	emscripten_sleep( ms>0 ? ms : 0 );
+#else
 	int t=bbMilliSecs()+ms;
 	for(;;){
 		if( !bbRuntimeIdle() ) RTEX( 0 );
-		int d=t-bbMilliSecs();	//how long left to wait
+		int d=t-bbMilliSecs();
 		if( d<=0 ) return;
 		if( d>100 ) d=100;
-#ifdef BB_WINDOWS
-		Sleep( d );
-#else
 		usleep( d * 1000 );
-#endif
 	}
+#endif
 }
 
 bb_int_t BBCALL bbMilliSecs(){
-#ifdef BB_WINDOWS
-	return timeGetTime();
+#ifdef BB_EMSCRIPTEN
+	return (bb_int_t)(long long)emscripten_get_now()-base_time;
 #else
 	int t;
 	struct timeval tv;
@@ -110,79 +116,68 @@ BBStr * BBCALL bbGetEnv( BBStr *env_var ){
 }
 
 void BBCALL bbSetEnv( BBStr *env_var,BBStr *val ){
-#ifndef _WIN32
 	setenv( (*env_var).c_str(),(*val).c_str(),1 );
-#else
-	std::string t=*env_var+"="+*val;
-	_putenv( t.c_str() );
-#endif
 	delete env_var;
 	delete val;
 }
 
+BBStr * BBCALL bbGetClipboardContents(){
+#ifdef BB_EMSCRIPTEN
+	char *p=bbClipboardReadJS();
+	BBStr *r=d_new BBStr( p?p:"" );
+	if( p ) free( p );
+	return r;
+#else
+	return d_new BBStr( "" );
+#endif
+}
 
+void BBCALL bbSetClipboardContents( BBStr *contents ){
+#ifdef BB_EMSCRIPTEN
+	EM_ASM({
+		try{ navigator.clipboard.writeText( UTF8ToString( $0 ) ); }catch(e){}
+	},contents->c_str() );
+#endif
+	delete contents;
+}
 
 bb_int_t BBCALL bbScreenWidth( bb_int_t i ){
-#ifdef BB_WINDOWS
-	return GetSystemMetrics( SM_CXSCREEN );
-#endif
-#ifdef BB_MACOS
-	auto id=CGMainDisplayID();
-	return CGDisplayPixelsWide( id );
-#endif
-#ifdef BB_IOS
-	return iosScreenWidth();
-#endif
-	// TODO: linux,android,ovr,emscripten,nx
+#ifdef BB_EMSCRIPTEN
+	return EM_ASM_INT( return (typeof window!=='undefined'&&window.innerWidth)?window.innerWidth:0; );
+#else
 	return 0;
+#endif
 }
 
 bb_int_t BBCALL bbScreenHeight( bb_int_t i ){
-#ifdef BB_WINDOWS
-	return GetSystemMetrics( SM_CYSCREEN );
+#ifdef BB_EMSCRIPTEN
+	return EM_ASM_INT( return (typeof window!=='undefined'&&window.innerHeight)?window.innerHeight:0; );
+#else
+	return 0;
 #endif
-#ifdef BB_MACOS
-	auto id=CGMainDisplayID();
-	return CGDisplayPixelsHigh( id );
-#endif
-#ifdef BB_IOS
-	return iosScreenHeight();
-#endif
-	// TODO: linux,android,ovr,emscripten,nx
+}
+
+bb_int_t BBCALL bbDesktopWidth(){
+	return bbScreenWidth( -1 );
+}
+
+bb_int_t BBCALL bbDesktopHeight(){
+	return bbScreenHeight( -1 );
+}
+
+bb_int_t BBCALL bbTotalPhys(){
 	return 0;
 }
 
-#ifdef BB_WINDOWS
-static bool dpi_calculated=false;
-static float dpi_x, dpi_y;
-void calcDPI(){
-	if( dpi_calculated ) return;
-
-	HDC hdc=GetDC( GetDesktopWindow() );
-	dpi_x=GetDeviceCaps( hdc,LOGPIXELSX ) / 96.0f;
-	dpi_y=GetDeviceCaps( hdc,LOGPIXELSY ) / 96.0f;
-	ReleaseDC( GetDesktopWindow(),hdc );
-	dpi_calculated=true;
+bb_int_t BBCALL bbAvailPhys(){
+	return 0;
 }
-#endif
 
 bb_float_t BBCALL bbDPIScaleX(){
-#ifdef BB_WINDOWS
-	calcDPI();return dpi_x;
-#endif
-#ifdef BB_MACOS
-	return 2.0; // TODO:
-#endif
 	return 1.0;
 }
 
 bb_float_t BBCALL bbDPIScaleY(){
-#ifdef BB_WINDOWS
-	calcDPI();return dpi_y;
-#endif
-#ifdef BB_MACOS
-	return 2.0; // TODO:
-#endif
 	return 1.0;
 }
 
@@ -205,9 +200,8 @@ BBStr * BBCALL bbCurrentTime(){
 BBMODULE_CREATE( system ){
 	bbSystemDriver=0;
 	bbSystemProperties["appdir"]=bbApp().executable_path;
-#ifndef BB_WINDOWS
+	base_time=0;
 	base_time=bbMilliSecs();
-#endif
 	return true;
 }
 

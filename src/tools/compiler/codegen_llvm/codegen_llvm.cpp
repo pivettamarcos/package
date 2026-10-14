@@ -1,4 +1,5 @@
 #include "codegen_llvm.h"
+extern bool bbTarget32; // defined in tree/type.cpp; selects 32-bit Blitz int/float
 #include <llvm/ADT/Any.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
@@ -33,7 +34,7 @@ Codegen_LLVM::Codegen_LLVM( bool debug ):debug(debug),breakBlock(0) {
 	builder=new llvm::IRBuilder<>( *context );
 
 	voidTy=llvm::Type::getVoidTy( *context );
-	intTy=llvm::Type::getInt64Ty( *context );
+	intTy=bbTarget32 ? llvm::Type::getInt32Ty( *context ) : llvm::Type::getInt64Ty( *context );
 	voidPtr=llvm::PointerType::get( *context,0 );
 
 	// initialize stdlib constructs...
@@ -156,11 +157,12 @@ llvm::Value *Codegen_LLVM::CastToArrayPtr( llvm::Value *v ){
 }
 
 llvm::Constant *Codegen_LLVM::constantInt( int i ){
-	return llvm::ConstantInt::get( *context,llvm::APInt( 64,i ) );
+	return llvm::ConstantInt::get( intTy,(uint64_t)(int64_t)i,true );
 }
 
 llvm::Constant *Codegen_LLVM::constantFloat( double f ){
-	return llvm::ConstantFP::get( *context,llvm::APFloat( f ) );
+	return llvm::ConstantFP::get( bbTarget32 ? llvm::Type::getFloatTy(*context)
+	                                         : llvm::Type::getDoubleTy(*context), f );
 }
 
 llvm::Constant *Codegen_LLVM::constantString( const std::string &s ){
@@ -184,7 +186,7 @@ llvm::GlobalVariable *Codegen_LLVM::getArray( std::string &ident, int dims ){
 		std::vector<llvm::Type*> els;
 		els.push_back( bbArray );  // base
 		for( int k=0;k<dims;++k ) {
-			els.push_back( llvm::Type::getInt64Ty( *context ) ); // scales
+			els.push_back( intTy ); // scales
 		}
 		arrayTypes[ident]=llvm::StructType::create( *context,els,"_a"+ident+"data" );
 		arrays[ident]=(llvm::GlobalVariable*)module->getOrInsertGlobal( "_a"+ident,arrayTypes[ident] );

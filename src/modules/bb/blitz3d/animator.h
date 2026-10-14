@@ -46,9 +46,9 @@ private:
 	};
 
 	struct Anim{
-		//anim keys
+
 		std::vector<Animation> keys;
-		//for transitions...
+
 		bool pos,scl,rot;
 		Vector src_pos,dest_pos;
 		Vector src_scl,dest_scl;

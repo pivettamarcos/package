@@ -12,7 +12,6 @@ class Model::MeshQueue{
 	int fv,vc,ft,tc;
 	Brush brush;
 	int q_type;
-//	bool opaque;
 
 	static MeshQueue *pool;
 
@@ -31,6 +30,37 @@ public:
 	void render(){
 		bbScene->setRenderState( brush.getRenderState() );
 		bbScene->render( mesh,fv,vc,ft,tc );
+	}
+
+	static unsigned long long mix( unsigned long long h,unsigned long long v ){
+		return h^( v+0x9e3779b97f4a7c15ULL+(h<<6)+(h>>2) );
+	}
+
+	static unsigned long long bits( float f ){
+		unsigned int u;
+		memcpy( &u,&f,sizeof(u) );
+		return u;
+	}
+
+	void sortKeys( unsigned long long &k0,unsigned long long &k1 )const{
+		const BBScene::RenderState &rs=brush.getRenderState();
+
+		k0=mix( 0,(unsigned long long)rs.fx );
+		k0=mix( k0,(unsigned long long)rs.blend );
+		k1=0;
+		for( int k=0;k<BBScene::MAX_TEXTURES;++k ){
+			const BBScene::RenderState::TexState &ts=rs.tex_states[k];
+			if( !ts.canvas||!ts.blend ) continue;
+			k0=mix( k0,(unsigned long long)(size_t)ts.canvas );
+			k0=mix( k0,(unsigned long long)ts.flags );
+			k0=mix( k0,(unsigned long long)ts.blend );
+			k1=mix( k1,(unsigned long long)(size_t)ts.matrix );
+		}
+		k1=mix( k1,bits( rs.color[0] ) );
+		k1=mix( k1,bits( rs.color[1] ) );
+		k1=mix( k1,bits( rs.color[2] ) );
+		k1=mix( k1,bits( rs.alpha ) );
+		k1=mix( k1,bits( rs.shininess ) );
 	}
 	void *operator new( size_t sz ){
 		static const int GROW=256;
@@ -73,9 +103,7 @@ bool Model::beginRender( float t ){
 	Object::beginRender( t );
 	tweened_alpha=brush.getAlpha();
 	if( t!=1 && tweened_alpha!=captured_alpha ){
-		//
-		//render tweening of alpha
-		//
+
 		tweened_alpha=(tweened_alpha-captured_alpha)*t+captured_alpha;
 	}
 	return tweened_alpha>0;
@@ -84,9 +112,7 @@ bool Model::beginRender( float t ){
 bool Model::doAutoFade( const Vector &eye ){
 	float alpha=tweened_alpha;
 	if( auto_fade ){
-		//
-		//autofading of alpha
-		//
+
 		float d=eye.distance( getRenderTform().v );
 		if( d>=auto_fade_fr ) return false;
 		if( d>=auto_fade_nr ){
@@ -117,6 +143,23 @@ void Model::enqueue( BBMesh *mesh,int fv,int vc,int ft,int tc ){
 
 void Model::enqueue( BBMesh *mesh,int fv,int vc,int ft,int tc,const Brush &brush ){
 	enqueue( new MeshQueue( mesh,fv,vc,ft,tc,brush ) );
+}
+
+void Model::takeQueue( int type,std::vector<Draw> &out ){
+	std::vector<MeshQueue*> &que=queues[type];
+	for( size_t k=que.size();k>0;--k ){
+		Draw d;
+		d.model=this;
+		d.queue=que[k-1];
+		d.queue->sortKeys( d.key0,d.key1 );
+		out.push_back( d );
+	}
+	que.clear();
+}
+
+void Model::drawQueued( const Draw &d ){
+	d.queue->render();
+	delete d.queue;
 }
 
 void Model::renderQueue( int type ){

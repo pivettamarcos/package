@@ -101,11 +101,11 @@ void StructDeclNode::translate2( Codegen_LLVM *g ){
 	objdata.push_back( llvm::ConstantPointerNull::get( llvm::PointerType::get( g->bbObj,0 ) ) );     // next
 	objdata.push_back( llvm::ConstantPointerNull::get( llvm::PointerType::get( g->bbObj,0 ) ) );     // prev
 	objdata.push_back( llvm::ConstantPointerNull::get( llvm::PointerType::get( g->bbObjType,0 ) ) ); // type
-	objdata.push_back( llvm::ConstantInt::get( *g->context,llvm::APInt(64, -1) ) );                  // ref_cnt
+	objdata.push_back( llvm::ConstantInt::get( Type::int_type->llvmType( g->context.get() ),-1 ) );                  // ref_cnt
 	auto emptyobj=llvm::ConstantStruct::get( g->bbObj,objdata );
 
 	std::vector<llvm::Constant*> objtypedata;
-	objtypedata.push_back( llvm::ConstantInt::get( *g->context,llvm::APInt( 64,5 ) ) ); // type
+	objtypedata.push_back( llvm::ConstantInt::get( Type::int_type->llvmType( g->context.get() ),5 ) ); // type
 
 	for( int k=0;k<2;++k ){ // used/free
 		std::vector<llvm::Value*> indices;
@@ -119,13 +119,13 @@ void StructDeclNode::translate2( Codegen_LLVM *g ){
 		objdata.push_back( objptr );     // next
 		objdata.push_back( objptr );     // prev
 		objdata.push_back( llvm::ConstantPointerNull::get( llvm::PointerType::get( g->bbObjType,0 ) ) ); // type
-		objdata.push_back( llvm::ConstantInt::get( *g->context,llvm::APInt(64, -1) ) );                  // ref_cnt
+		objdata.push_back( llvm::ConstantInt::get( Type::int_type->llvmType( g->context.get() ),-1 ) );                  // ref_cnt
 		auto defaultobj=llvm::ConstantStruct::get( g->bbObj,objdata );
 
 		objtypedata.push_back( defaultobj );
 	}
 
-	objtypedata.push_back( llvm::ConstantInt::get( *g->context,llvm::APInt( 64,sem_type->fields->size() ) ) ); // fieldCnt
+	objtypedata.push_back( llvm::ConstantInt::get( Type::int_type->llvmType( g->context.get() ),sem_type->fields->size( ) ) ); // fieldCnt
 	// fieldTypes does not need to be accounted for.
 
 	std::vector<llvm::Constant*> structfields;

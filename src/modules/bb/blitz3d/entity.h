@@ -26,7 +26,6 @@ public:
 
 	virtual Entity *clone()=0;
 
-	//ugly casts!
 	virtual Object *getObject(){ return 0; }
 	virtual Camera *getCamera(){ return 0; }
 	virtual Light *getLight(){ return 0; }

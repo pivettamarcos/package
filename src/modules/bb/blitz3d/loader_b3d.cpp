@@ -4,8 +4,11 @@
 #include "meshmodel.h"
 #include "pivot.h"
 #include "meshutil.h"
-
-//#define SHOW_BONES
+#include <cerrno>
+#include <cstring>
+#ifdef BB_EMSCRIPTEN
+#include <emscripten.h>
+#endif
 
 static FILE *in;
 static std::vector<int> chunk_stack;
@@ -29,8 +32,12 @@ static void clear(){
 
 static int readChunk(){
 	int header[2];
-	if( fread( header,8,1,in )<1 ) return 0;
-	chunk_stack.push_back( ftell( in )+header[1] );
+	if( fread( header,8,1,in )<1 ){
+		chunk_stack.push_back( (int)ftell( in ) );
+		return 0;
+	}
+	int sz=header[1]<0 ? 0 : header[1];
+	chunk_stack.push_back( ftell( in )+sz );
 	return swap_endian( header[0] );
 }
 
@@ -40,11 +47,14 @@ static void exitChunk(){
 }
 
 static int chunkSize(){
-	return chunk_stack.back()-ftell( in );
+	if( feof( in ) ) return 0;
+	int n=chunk_stack.back()-ftell( in );
+	return n>0 ? n : 0;
 }
 
 static void read( void *buf,int n ){
-	fread( buf,n,1,in );
+	if( n<=0 ) return;
+	if( fread( buf,n,1,in )<1 ) memset( buf,0,n );
 }
 
 static void skip( int n ){
@@ -82,7 +92,7 @@ static void readColor( unsigned *t ){
 static std::string readString(){
 	std::string t;
 	for(;;){
-		char c;
+		char c=0;
 		read( &c,1 );
 		if( !c ) return t;
 		t+=c;
@@ -99,7 +109,6 @@ static void readTextures(){
 		readFloatArray( scl,2 );
 		float rot=readFloat();
 
-		//create texture
 		Texture tex( name,flags & 0xffff );
 
 		tex.setBlend( blend );
@@ -115,6 +124,8 @@ static void readTextures(){
 
 static void readBrushes(){
 	int n_texs=readInt();
+	if( n_texs<0 ) n_texs=0;
+	int n_read=n_texs<8 ? n_texs : 8;
 
 	int tex_id[8]={-1,-1,-1,-1,-1,-1,-1,-1};
 
@@ -125,7 +136,8 @@ static void readBrushes(){
 		float shi=readFloat();
 		int blend=readInt();
 		int fx=readInt();
-		readIntArray( tex_id,n_texs );
+		readIntArray( tex_id,n_read );
+		if( n_texs>n_read ) skip( (n_texs-n_read)*4 );
 
 		Brush bru;
 
@@ -136,7 +148,7 @@ static void readBrushes(){
 		bru.setFX( fx );
 
 		for( int k=0;k<8;++k ){
-			if( tex_id[k]<0 ) continue;
+			if( tex_id[k]<0 || tex_id[k]>=(int)textures.size() ) continue;
 			bru.setTexture( k,textures[tex_id[k]],0 );
 		}
 
@@ -149,6 +161,9 @@ static int readVertices(){
 	int flags=readInt();
 	int tc_sets=readInt();
 	int tc_size=readInt();
+	if( tc_sets<0 ) tc_sets=0;
+	if( tc_size<0 ) tc_size=0;
+	int tc_read=tc_size<4 ? tc_size : 4;
 
 	float tc[4]={0};
 
@@ -162,7 +177,8 @@ static int readVertices(){
 			readColor( &t.color );
 		}
 		for( int k=0;k<tc_sets;++k ){
-			readFloatArray( tc,tc_size );
+			readFloatArray( tc,tc_read );
+			if( tc_size>tc_read ) skip( (tc_size-tc_read)*4 );
 			if( k<2 ) memcpy( t.tex_coords[k],tc,8 );
 		}
 		MeshLoader::addVertex( t );
@@ -173,10 +189,13 @@ static int readVertices(){
 
 static void readTriangles(){
 	int brush_id=readInt();
-	Brush b=brush_id>=0 ? brushes[brush_id] : Brush();
+	Brush b=( brush_id>=0 && brush_id<(int)brushes.size() ) ? brushes[brush_id] : Brush();
+	int n_verts=MeshLoader::numVertices();
 	while( chunkSize() ){
 		int verts[3];
 		readIntArray( verts,3 );
+		if( verts[0]<0||verts[1]<0||verts[2]<0||
+			verts[0]>=n_verts||verts[1]>=n_verts||verts[2]>=n_verts ) continue;
 		MeshLoader::addTriangle( verts,b );
 	}
 }
@@ -199,25 +218,15 @@ static int readMesh(){
 
 static Object *readBone(){
 
-#ifdef SHOW_BONES
-	Brush b;
-	b.setColor( Vector( 1,0,0 ) );
-	b.setAlpha( .75f );
-	MeshModel *bone=MeshUtil::createSphere( b,16 );
-	Transform t;
-	t.m.i.x=.1f;
-	t.m.j.y=.1f;
-	t.m.k.z=.1f;
-	bone->transform( t );
-#else
 	Pivot *bone=d_new Pivot();
-#endif
 
 	bones.push_back( bone );
 
+	int n_verts=MeshLoader::numVertices();
 	while( chunkSize() ){
 		int vert=readInt();
 		float weight=readFloat();
+		if( vert<0 || vert>=n_verts ) continue;
 		MeshLoader::addBone( vert,weight,bones.size() );
 	}
 	return bone;
@@ -298,7 +307,7 @@ static Object *readObject( Object *parent ){
 	if( mesh ){
 		MeshLoader::endMesh( mesh );
 		if( !(mesh_flags&1) ) mesh->updateNormals();
-		if( mesh_brush!=-1 ) mesh->setBrush( brushes[mesh_brush] );
+		if( mesh_brush>=0 && mesh_brush<(int)brushes.size() ) mesh->setBrush( brushes[mesh_brush] );
 	}
 
 	if( mesh && bones.size() ){
@@ -321,18 +330,33 @@ MeshModel *Loader_B3D::load( const std::string &f,const Transform &conv,int hint
 	animonly=!!(hint&MeshLoader::HINT_ANIMONLY);
 
 	in=fopen( f.c_str(),"rb" );
-	if( !in ) return 0;
+	if( !in ){
+		fprintf( stderr,"[b3d] fopen failed: %s errno=%d %s\n",f.c_str(),errno,strerror( errno ) );
+#ifdef BB_EMSCRIPTEN
+		EM_ASM({
+			try{ console.log( "[fd] streams="+FS.streams.filter( function(s){ return s; } ).length+" cwd="+FS.cwd() ); }catch(e){}
+			try{ console.log( "[fd] exists="+FS.analyzePath( UTF8ToString( $0 ) ).exists ); }catch(e){}
+			try{
+				var d=FS.readdir( "/GFX/NPCs" );
+				console.log( "[fd] dir066="+d.filter( function(n){ return n.indexOf( "066" )>=0; } ).join( "," ) );
+			}catch(e){ console.log( "[fd] readdir fail: "+e ); }
+		},f.c_str());
+#endif
+		return 0;
+	}
 
 	::clear();
 
 	int tag=readChunk();
 	if( tag!='BB3D' ){
+		fprintf( stderr,"[b3d] bad tag %08x: %s\n",tag,f.c_str() );
 		fclose( in );
 		return 0;
 	}
 
 	int version=readInt();
 	if( version>1 ){
+		fprintf( stderr,"[b3d] bad version %d: %s\n",version,f.c_str() );
 		fclose( in );
 		return 0;
 	}
@@ -356,5 +380,11 @@ MeshModel *Loader_B3D::load( const std::string &f,const Transform &conv,int hint
 
 	::clear();
 
-	return obj ? obj->getModel()->getMeshModel() : 0;
+	if( !obj ){ fprintf( stderr,"[b3d] no NODE object: %s\n",f.c_str() );return 0; }
+	if( Model *m=obj->getModel() ){
+		if( MeshModel *mm=m->getMeshModel() ) return mm;
+	}
+	fprintf( stderr,"[b3d] no mesh model: %s\n",f.c_str() );
+	delete obj;
+	return 0;
 }

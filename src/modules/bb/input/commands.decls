@@ -1,11 +1,10 @@
-;keyboard
 KeyDown%( key% ):"bbKeyDown"
 KeyHit%( key% ):"bbKeyHit"
 GetKey%( ascii%=1 ):"bbGetKey"
 WaitKey%():"bbWaitKey"
 FlushKeys():"bbFlushKeys"
+TextInput$( s$ ):"bbTextInput"
 
-;mouse
 MouseDown%( button% ):"bbMouseDown"
 MouseHit%( button% ):"bbMouseHit"
 GetMouse%():"bbGetMouse"
@@ -19,7 +18,6 @@ MouseYSpeed%():"bbMouseYSpeed"
 MouseZSpeed%():"bbMouseZSpeed"
 FlushMouse():"bbFlushMouse"
 
-;joysticks
 CountJoys%():"bbCountJoys"
 FindJoy%( id$ ):"bbFindJoy"
 JoyID$( port% ):"bbJoyID"

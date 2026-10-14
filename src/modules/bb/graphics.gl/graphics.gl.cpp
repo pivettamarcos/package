@@ -1,6 +1,7 @@
 #include "../stdutil/stdutil.h"
 #include "graphics.gl.h"
 
+#include <cstdlib>
 #include <vector>
 
 GLuint _bbGLCompileShader( GLenum type,const std::string &name,const std::string &source ){
@@ -61,7 +62,7 @@ GLuint _bbGLCompileProgram( const std::string &name,const std::string &src ){
 	GL( glLinkProgram( program ) );
 	GL( glGetProgramiv( program,GL_LINK_STATUS,&link_status ) );
 	if( !link_status ){
-		LOGD( "%s","Failed to link linker" );
+		LOGD( "%s","Failed to link shader program" );
 
 		GLint maxLength = 0;
 		GL( glGetProgramiv( program,GL_INFO_LOG_LENGTH,&maxLength ) );
@@ -127,29 +128,26 @@ void bbGLGraphicsCheckErrors( const char *file, int line ){
 }
 
 GLGraphics::GLGraphics():fb(&res,BBCanvas::CANVAS_TEX_VIDMEM),bb(&res,BBCanvas::CANVAS_TEX_VIDMEM){
-	GLint framebuffer=0;
-#ifdef BB_IOS
-	// ios doesn't supply a default framebuffer
-	GL( glGetIntegerv( GL_FRAMEBUFFER_BINDING,(int*)&framebuffer ) );
-	LOGD( "framebuffer: %i\n", framebuffer );
-#endif
-
-	fb.setFramebuffer( framebuffer,GL_FRONT );
+	fb.setFramebuffer( 0,GL_FRONT );
 	front_canvas=&fb;
 
-	bb.setFramebuffer( framebuffer,GL_BACK );
-	back_canvas=&fb;
+	bb.setFramebuffer( 0,GL_BACK );
+	back_canvas=&bb;
 
 	GL( glDisable( GL_DEPTH_TEST ) );
 	GL( glEnable( GL_SCISSOR_TEST ) );
 }
 
 bool GLGraphics::init(){
+#ifdef BB_EMSCRIPTEN
+	def_font=(BBImageFont*)loadFont( "/GFX/cour.ttf",12,0 );
+	if( def_font==0 ) def_font=(BBImageFont*)loadFont( "GFX/cour.ttf",12,0 );
+#else
 	def_font=(BBImageFont*)loadFont( "courier",12,0 );
 	if( def_font==0 ){
 		def_font=(BBImageFont*)loadFont( "courier new",12,0 );
 	}
-
+#endif
 	return def_font!=0;
 }
 
@@ -157,7 +155,6 @@ BBFont *GLGraphics::getDefaultFont()const{
 	return def_font;
 }
 
-//OBJECTS
 BBCanvas *GLGraphics::createCanvas( int width,int height,int flags ){
 	GLCanvas *canvas=d_new GLCanvas( &res,width,height,flags );
 	canvas_set.insert( canvas );

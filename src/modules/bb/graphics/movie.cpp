@@ -2,8 +2,6 @@
 #include <bb/runtime/runtime.h>
 #include "graphics.h"
 
-extern BBGraphics *gx_graphics;
-
 BBMovie::~BBMovie(){
 }
 

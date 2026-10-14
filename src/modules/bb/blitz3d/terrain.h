@@ -20,10 +20,8 @@ public:
 	int getSize()const;
 	float getHeight( int x,int z )const;
 
-	//model interface
 	bool render( const RenderContext &rc );
 
-	//object interface
 	bool collide( const Line &line,float radius,Collision *curr_coll,const Transform &tf );
 	
 private:

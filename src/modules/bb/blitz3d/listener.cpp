@@ -17,7 +17,7 @@ Object(t){
 Listener::~Listener(){
 	if( !gx_audio ) return;
 
-	Vector pos,vel,up(0,1,1),forward(0,0,1);
+	Vector pos,vel,up(0,1,0),forward(0,0,1);
 	gx_audio->set3dListener( &pos.x,&vel.x,&forward.x,&up.x );
 }
 

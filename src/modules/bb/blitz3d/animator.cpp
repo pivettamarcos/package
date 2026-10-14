@@ -136,18 +136,14 @@ void Animator::beginTrans(){
 }
 
 void Animator::setAnimTime( float time,int seq ){
-	if( seq<0 || seq>_seqs.size() ) return;
+	if( seq<0 || seq>=(int)_seqs.size() ) return;
 
 	_mode=0;
 	_speed=0;
 	_seq=seq;
 	_seq_len=_seqs[_seq].frames;
 
-	//Ok, mod the anim time!
 	_time=fmod( time,_seq_len );
-
-	//if( time<0 || time>_seq_len ) time=fmod( time,_seq_len );
-	//_time=time;
 
 	if( _time<0 ) _time+=+_seq_len;
 
@@ -195,7 +191,6 @@ void Animator::update( float elapsed ){
 		}
 	}
 
-	//do anim...
 	_time+=_speed*elapsed;
 
 	switch( _mode ){

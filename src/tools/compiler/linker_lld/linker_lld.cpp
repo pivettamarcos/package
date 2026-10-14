@@ -30,16 +30,15 @@
 #define FORMAT elf
 #define UNAME "linux"
 #else
-LLD_HAS_DRIVER(elf) // android/nx
+LLD_HAS_DRIVER(elf)
 #endif
 
-LLD_HAS_DRIVER(FORMAT) // native
+LLD_HAS_DRIVER(FORMAT)
 
 Linker_LLD::Linker_LLD( const std::string &home ):home(home){
 }
 
 void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &target,const std::string &mainObj,const BundleInfo &bundle,const std::string &exeFile ){
-	// string tmpdir=string( tmpnam(0) );
 	std::string tmpdir="tmp/apk";
 
 	std::string toolchain=home+"/bin/"+target.triple;
@@ -49,7 +48,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 	std::string androidsdk,ndkroot,sysroot,ndktriple,ndkarch;
 	if( android ){
 		char *androidhome=getenv("ANDROID_HOME");
-		// TODO: verify environment at the start...
 		if( androidhome==0 ){
 			std::cerr<<"ANDROID_HOME is not set"<<std::endl;
 			exit( 1 );
@@ -94,7 +92,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 		devkitpro="/opt/devkitpro";
 	}
 
-	// TODO: sort out all the lazy strdup business below...
 	std::vector<std::string> args,libs,systemlibs;
 
 	std::string binaryPath=exeFile;
@@ -118,7 +115,7 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 
 #ifdef BB_MACOS
 	if( app ){
-		binaryPath=binaryPath.substr( 0,binaryPath.size()-4 ); // remove .app
+		binaryPath=binaryPath.substr( 0,binaryPath.size()-4 );
 		std::string appid=basename( (char*)binaryPath.c_str() );
 		binaryPath=exeFile+"/"+appid;
 
@@ -130,7 +127,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 		remove( exeFile.c_str() );
 		system( ("rm -rf "+tmpdir).c_str() );
 
-		// arm64-v8a armeabi-v7a x86_64 x86
 		system( ("mkdir -p "+tmpdir+"/lib/arm64-v8a").c_str() );
 		binaryPath=tmpdir+"/lib/arm64-v8a/libmain.so";
 	}else if( nx ){
@@ -142,15 +138,12 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 		binaryPath=dir+"/"+base+".elf";
 	}
 
-	// strip unused symbols...
 	if( target.host ){
 #ifdef BB_MACOS
-		// strip unused code
 		args.push_back( "-dead_strip" );
 		args.push_back( "-dead_strip_dylibs" );
 		args.push_back( "--deduplicate-strings" );
 
-		// strip debug symbols
 		if( !debug ){
 		  args.push_back( "-S" );args.push_back( "-x" );
 		}
@@ -172,14 +165,12 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 
 	if( !windows && !nx ){
 		args.push_back("--error-limit=0");
-		// args.push_back("--lto-O0");
 	}
 
 	if( target.host ){
 #ifdef BB_WINDOWS
 		args.push_back( "/errorlimit:0" );
 
-		// args.push_back( "/subsystem:windows" );
 
 		args.push_back( "/nodefaultlib" );
 		args.push_back( "oldnames.lib" );
@@ -194,10 +185,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 		args.push_back( "libcmt.lib" );
 		args.push_back( "libcpmt.lib" );
 
-		// args.push_back( "ucrt.lib" );
-		// args.push_back( "vcruntime.lib" );
-		// args.push_back( "msvcrt.lib" );
-		// args.push_back( "msvcprt.lib" );
 #endif
 	}else if( android ){
 		if( ndkarch=="aarch64" ){
@@ -232,7 +219,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 	}else if( nx ){
 		args.push_back( "-maarch64elf" );
 
-		// TODO: read from /opt/devkitpro/libnx/switch.specs
 		args.push_back( "-X" );
 		args.push_back( "-EL" );
 		args.push_back( "-T" );args.push_back( devkitpro+"/libnx/switch.ld" );
@@ -266,7 +252,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 			platform_version_min=platform_version_max=target.version;
 		}
 
-		// TODO: use xcrun --show-sdk-path
 		args.push_back("-syslibroot");
 		args.push_back( "/Applications/Xcode.app/Contents/Developer/Platforms/"+sdkname+".platform/Developer/SDKs/"+sdkname+".sdk" );
 
@@ -275,7 +260,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 		libs.push_back( "c++" );
 
 		libs.push_back( "System" );
-		// libs.push_back( "System_asan" );
 
 		args.push_back("-arch");
 		args.push_back( target.arch );
@@ -316,7 +300,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 			args.push_back( clang_libs+"/libclang_rt.profile_osx.a" );
 			args.push_back( clang_libs+"/libclang_rt.osx.a" );
 		}else{
-			// TODO: figure out what exactly to do here...
 		}
 	}
 #endif
@@ -354,6 +337,63 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 		for( std::string lib:m.system_libs ) systemlibs.push_back( lib );
 	}
 
+	if( target.type=="emscripten" ){
+		const char *webgpu_env=getenv( "SCPCB_WEBGPU" );
+		bool webgpu=webgpu_env && std::string(webgpu_env)=="1";
+		std::string emlibdir=libdir;
+		if( const char *p=getenv( "SCPCB_LIB_DIR" ) ) emlibdir=p;
+		std::string obj=exeFile+".o";
+		{ std::ofstream of( obj,std::ios_base::binary ); of.write( mainObj.c_str(),mainObj.size() ); }
+		std::string extra=getenv("SCPCB_EMCC_EXTRA")?getenv("SCPCB_EMCC_EXTRA"):"";
+		std::string cmd="emcc \""+obj+"\" ";
+		if( getenv("SCPCB_COMPAT_OBJ") ) cmd+=std::string("\"")+getenv("SCPCB_COMPAT_OBJ")+"\" ";
+		cmd+="-L\""+emlibdir+"\" ";
+		cmd+="-Wl,--start-group ";
+		for( auto lib:libs ){
+			if( lib=="bb.runtime.html" ) continue;
+			cmd+="-l"+lib+" ";
+		}
+		cmd+="-Wl,--end-group ";
+		for( auto lib:systemlibs ){
+			if( lib=="openal" ) continue;
+			cmd+="-l"+lib+" ";
+		}
+		auto setting=[&cmd,&extra]( const std::string &flag ){
+			std::string key=flag.substr( 0,flag.find('=')+1 );
+			if( key.size()>1 && extra.find( key )!=std::string::npos ) return;
+			cmd+=flag+" ";
+		};
+		cmd+="-fwasm-exceptions ";
+		setting( "-sJSPI=1" );
+		setting( "-sALLOW_MEMORY_GROWTH=1" );
+		setting( "-sINITIAL_MEMORY=536870912" );
+		setting( "-sSTACK_SIZE=16777216" );
+		if( webgpu ){
+			cmd+="--use-port=emdawnwebgpu ";
+		}else{
+			setting( "-sMIN_WEBGL_VERSION=2" );
+			setting( "-sMAX_WEBGL_VERSION=2" );
+			setting( "-sFULL_ES2=1" );
+			setting( "-sFULL_ES3=1" );
+			setting( "-sUSE_WEBGL2=1" );
+			setting( "-sGL_ENABLE_GET_PROC_ADDRESS=1" );
+		}
+		setting( "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,callMain" );
+		setting( "-sEXIT_RUNTIME=0" );
+		setting( "-sFORCE_FILESYSTEM=1" );
+		setting( "-sASSERTIONS=1" );
+		cmd+="-lidbfs.js ";
+		if( extra.find( "-O" )==std::string::npos ) cmd+="-O2 ";
+		if( extra.size() ) cmd+=extra+" ";
+		cmd+="-o \""+exeFile+".html\"";
+		std::cout<<"[emcc] linking web app..."<<std::endl;
+		int rc=system( cmd.c_str() );
+		remove( obj.c_str() );
+		if( rc!=0 ){ std::cerr<<"emcc link failed (rc="<<rc<<")"<<std::endl; exit(1); }
+		std::cout<<"[emcc] wrote "<<exeFile<<".html/.js/.wasm"<<std::endl;
+		return;
+	}
+
 	if( nux||nx ){
 		args.push_back("--start-group");
 	}
@@ -364,7 +404,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 	mainFile.flush();
 	args.push_back( mainPath );
 
-	//*------------------------
 
 	for( auto lib:libs ){
 		std::string arg;
@@ -398,8 +437,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 #ifdef BB_LINUX
 		args.push_back("-dynamic-linker");args.push_back("/lib64/ld-linux-x86-64.so.2");
 
-		// TODO: find out the best way to get this information from the environment
-		// TODO: gcc --print-file-name=libc.a
 		args.push_back("-L");args.push_back( LIBGCC_DIR );
 		args.push_back("-L");args.push_back( "/lib" );
 		args.push_back("-L");args.push_back( LIBARCH_DIR );
@@ -427,9 +464,7 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 	}else if( android ){
 		args.push_back("-l");args.push_back("c++_static");
 		args.push_back("-l");args.push_back("c++abi");
-		//args.push_back("-l");args.push_back("gcc");
 		args.push_back("-l");args.push_back("c");
-		//args.push_back("-l");args.push_back("gcc");
 		args.push_back( ndkroot+"/sysroot/usr/lib/"+ndktriple+"/"+target.version+"/crtend_so.o" );
 	}else if( nx ){
 		std::string gcc=devkitpro+"/devkitA64/lib/gcc/aarch64-none-elf/"+target.version+"/pic";
@@ -455,8 +490,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 
 	bool success=false;
 	if( nx ){
-		// TODO: seems like it's possible to use the LLD elf linker, but there are
-		// some more config that needs to be discovered
 		std::string cmdline="";
 		for( auto arg:args ) cmdline+=arg+" ";
 
@@ -464,7 +497,6 @@ void Linker_LLD::createExe( bool debug,const std::string &rt,const Target &targe
 	}else{
 		std::vector<char *> _args;_args.reserve( args.size()+1 );
 
-		// just the name?
 		_args.push_back( strdup( "linker" ) );
 		for( auto arg:args ) _args.push_back( strdup( arg.c_str() ) );
 

@@ -19,6 +19,7 @@ BBMODULE_LINK( string ){
 	rtSym( "$Chr%ascii","bbChr",bbChr );
 	rtSym( "%Asc$string","bbAsc",bbAsc );
 	rtSym( "%Len$string","bbLen",bbLen );
+	rtSym( "%IsValidUTF8String$str","bbIsValidUTF8String",bbIsValidUTF8String );
 	rtSym( "$Hex%value","bbHex",bbHex );
 	rtSym( "$Bin%value","bbBin",bbBin );
 }

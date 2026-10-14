@@ -10,14 +10,14 @@ class Plane;
 class Matrix;
 class Transform;
 
-const float PI=3.14159265359f;		//180 degrees
-const float TWOPI=PI*2.0f;			//360 degrees
-const float HALFPI=PI*.5f;			//90  degrees
-const float QUARTERPI=PI*.25f;		//45  degrees
-const float EPSILON=.000001f;		//small value
+const float PI=3.14159265359f;
+const float TWOPI=PI*2.0f;
+const float HALFPI=PI*.5f;
+const float QUARTERPI=PI*.25f;
+const float EPSILON=.000001f;
 
 #undef INFINITY
-const float INFINITY=10000000.0f;	//big value
+const float INFINITY=10000000.0f;
 
 class Vector{
 public:
@@ -149,13 +149,13 @@ public:
 
 	Plane():d(0){
 	}
-	//normal/offset form
+
 	Plane( const Vector &n,float d ):n(n),d(d){
 	}
-	//point/normal form
+
 	Plane( const Vector &p,const Vector &n ):n(n),d(-n.dot(p)){
 	}
-	//create plane from tri
+
 	Plane( const Vector &v0,const Vector &v1,const Vector &v2 ){
 		n=(v1-v0).cross(v2-v0).normalized();d=-n.dot(v0);
 	}
@@ -467,18 +467,17 @@ inline Matrix rollMatrix( float q ){
 
 inline float matrixPitch( const Matrix &m ){
 	return m.k.pitch();
-//	return asinf( -m.k.y );
+
 }
 
 inline float matrixYaw( const Matrix &m ){
 	return m.k.yaw();
-	//return atan2f( -m.k.x,m.k.z );
+
 }
 
 inline float matrixRoll( const Matrix &m ){
 	return atan2f( m.i.y,m.j.y );
-	//Matrix t=pitchMatrix( -matrixPitch(m) )*yawMatrix( -matrixYaw(m) )*m;
-	//return atan2f( t.i.y,t.i.x );
+
 }
 
 inline Matrix scaleMatrix( float x,float y,float z ){
@@ -501,10 +500,6 @@ inline Quat rollQuat( float r ){
 	return Quat( cosf(r/-2),Vector( 0,0,sinf(r/-2) ) );
 }
 
-//inline Quat rotationQuat( float p,float y,float r ){
-//	return yawQuat(y)*pitchQuat(p)*rollQuat(r);
-//}
-
 Quat rotationQuat( float p,float y,float r );
 
 inline Matrix rotationMatrix( float p,float y,float r ){
@@ -524,8 +519,7 @@ inline float quatYaw( const Quat &q ){
 }
 
 inline float quatRoll( const Quat &q ){
-//	Vector i=q.i(),j=q.j();
-//	return atan2f( i.y,j.y );
+
 	return matrixRoll( q );
 }
 

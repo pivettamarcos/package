@@ -1,8 +1,8 @@
 precision highp float;
+precision highp int;
 
 uniform sampler2D u_tex;
 
-// must be mindful of alignment when ordering...
 layout(std140) uniform BBRenderState {
   uniform vec4 xywh;
   uniform vec2 res;

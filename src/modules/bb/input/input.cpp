@@ -76,6 +76,44 @@ void BBCALL bbFlushKeys(){
 	bbKeyboard.flush();
 }
 
+static void utf8PopBack( std::string &t ){
+	if( t.empty() ) return;
+	size_t k=t.size()-1;
+	while( k>0 && (t[k]&0xc0)==0x80 ) --k;
+	t.resize( k );
+}
+
+static void utf8Append( std::string &t,int c ){
+	if( c<0x80 ){
+		t+=(char)c;
+	}else if( c<0x800 ){
+		t+=(char)(0xc0|(c>>6));
+		t+=(char)(0x80|(c&0x3f));
+	}else if( c<0x10000 ){
+		t+=(char)(0xe0|(c>>12));
+		t+=(char)(0x80|((c>>6)&0x3f));
+		t+=(char)(0x80|(c&0x3f));
+	}else{
+		t+=(char)(0xf0|(c>>18));
+		t+=(char)(0x80|((c>>12)&0x3f));
+		t+=(char)(0x80|((c>>6)&0x3f));
+		t+=(char)(0x80|(c&0x3f));
+	}
+}
+
+BBStr * BBCALL bbTextInput( BBStr *s ){
+	std::string t=*s;
+	delete s;
+	for(;;){
+		int c=bbKeyboard.getKey();
+		if( !c ) break;
+		if( c==8 ) utf8PopBack( t );
+		else if( c==127 ) t.clear();
+		else if( c>=32 ) utf8Append( t,c );
+	}
+	return d_new BBStr( t );
+}
+
 bb_int_t BBCALL bbMouseDown( bb_int_t n ){
 	return bbMouse.keyDown( n );
 }
@@ -94,10 +132,6 @@ bb_int_t BBCALL bbWaitMouse(){
 		if( int key=bbMouse.getKey() ) return key;
 		bbDelay( 20 );
 	}
-}
-
-bb_int_t BBCALL bbMouseWait(){
-	return bbWaitMouse();
 }
 
 bb_int_t BBCALL bbMouseX(){

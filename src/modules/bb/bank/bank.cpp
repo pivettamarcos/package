@@ -27,7 +27,8 @@ void bbBank::resize( int n ){
 			memcpy( p,data,size );
 			delete[] data;
 			data=p;
-		}else memset( data+size,0,n-size );
+		}
+		memset( data+size,0,n-size );
 	}
 	size=n;
 }

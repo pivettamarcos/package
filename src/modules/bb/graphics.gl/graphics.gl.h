@@ -8,39 +8,24 @@
 #include <GL/glew.h>
 #endif
 
-#if defined(BB_DESKTOP) || defined(BB_EMSCRIPTEN)
-	#ifdef BB_MACOS
-		#include <OpenGL/gl.h>
-		#include <OpenGL/glext.h>
-	#else
-		#define GL_GLEXT_PROTOTYPES
-		#include <GL/gl.h>
-		// #include <GL/glext.h>
-	#endif
+#ifdef BB_MACOS
+	#include <OpenGL/gl.h>
+	#include <OpenGL/glext.h>
 #else
-	#ifdef BB_IOS
-		#include <OpenGLES/ES3/glext.h>
-	#endif
-
-	#if defined(BB_NDK) || defined(BB_NX)
-		#define GL_BGRA_EXT 0x80E1
-		#include <GLES3/gl3.h>
-		#ifndef GL_BGRA
-			#define GL_BGRA GL_BGRA_EXT
-		#endif
-	#endif
+	#define GL_GLEXT_PROTOTYPES
+	#include <GL/gl.h>
 #endif
 
 GLuint _bbGLCompileProgram( const std::string &name,const std::string &src );
 
-
-// #ifdef NDEBUG
-// #define GL( func ) func;
-// #else
 void bbGLGraphicsCheckErrors( const char *file, int line );
 const char * bbGLFramebufferStatusString( GLenum status );
+
+#if (defined(NDEBUG) || defined(BB_GL_NOCHECK)) && !defined(BB_GL_FORCE_CHECK)
+#define GL( func ) func;
+#else
 #define GL( func ) func; bbGLGraphicsCheckErrors( __FILE__,__LINE__ );
-// #endif
+#endif
 
 struct ContextResources{
 	unsigned int ubo;
@@ -61,7 +46,7 @@ protected:
 
 	GLCanvas fb, bb;
 public:
-	ContextResources res={ 0 }; // TODO: will make protected again
+	ContextResources res={ 0 };
 
 	GLGraphics();
 
@@ -69,11 +54,9 @@ public:
 
 	BBFont *getDefaultFont()const;
 
-	//OBJECTS
 	BBCanvas *createCanvas( int width,int height,int flags );
 	BBCanvas *loadCanvas( const std::string &file,int flags );
 
-	// b2dgraphics
 	BBMovie *openMovie( const std::string &file,int flags );
 };
 

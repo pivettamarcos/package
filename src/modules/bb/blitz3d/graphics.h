@@ -9,7 +9,7 @@ protected:
   std::set<BBScene*> scene_set;
 
 public:
-  ~B3DGraphics();
+  virtual ~B3DGraphics();
 
   virtual BBScene *createScene( int w,int h,float d,int flags )=0;
   BBScene *verifyScene( BBScene *scene );

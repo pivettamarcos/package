@@ -8,6 +8,7 @@
 
 extern std::vector<BBDevice*> bbJoysticks;
 extern BBInputDriver *gx_input;
+extern BBDevice bbKeyboard;
 
 int BBCALL bbEnumInput();
 

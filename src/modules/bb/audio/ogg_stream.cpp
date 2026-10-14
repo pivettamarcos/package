@@ -7,17 +7,18 @@
 
 size_t OGGAudioStream::oread( void *ptr, size_t size, size_t nmemb, void *datasource ){
 	OGGAudioStream *stream=(OGGAudioStream*)datasource;
-	size_t start=stream->in.tellg();
 	stream->in.read( (char*)ptr,size*nmemb );
 	size_t s=stream->in.gcount();
-	stream->in.clear(); // needed because reading past eof causing failbit!?
+	stream->in.clear();
 	return s;
 }
 
 int OGGAudioStream::oseek( void *datasource, ogg_int64_t offset, int whence ){
 	OGGAudioStream *stream=(OGGAudioStream*)datasource;
 	std::ios_base::seekdir way=whence==SEEK_SET?(std::ios_base::beg):(whence==SEEK_CUR?(std::ios_base::cur):std::ios_base::end);
-	return stream->in.seekg( offset,way ).gcount();
+	stream->in.clear();
+	stream->in.seekg( offset,way );
+	return stream->in.good() ? 0 : -1;
 }
 
 int OGGAudioStream::oclose( void *datasource ){
@@ -29,8 +30,12 @@ long OGGAudioStream::otell( void *datasource ){
 	return stream->in.tellg();
 }
 
-OGGAudioStream::OGGAudioStream( int buf_size ):AudioStream(buf_size){
+OGGAudioStream::OGGAudioStream( int buf_size ):AudioStream(buf_size),opened(false){
 	bits=BITS;
+}
+
+OGGAudioStream::~OGGAudioStream(){
+	if( opened ) ov_clear( &vfile );
 }
 
 bool OGGAudioStream::readHeader(){
@@ -42,10 +47,14 @@ bool OGGAudioStream::readHeader(){
 	if ( ov_open_callbacks( this,&vfile,0,0,callbacks )<0 ){
 		return false;
 	}
+	opened=true;
 
-	samples=ov_pcm_total( &vfile,0 );
-	channels=ov_info( &vfile,-1 )->channels;
-	frequency=ov_info( &vfile,-1 )->rate;
+	vorbis_info *vi=ov_info( &vfile,-1 );
+	if( !vi ) return false;
+
+	channels=vi->channels;
+	frequency=vi->rate;
+	samples=(unsigned int)( ov_pcm_total( &vfile,-1 )*channels );
 
 	return true;
 }
@@ -62,10 +71,16 @@ size_t OGGAudioStream::decode(){
 	int res,bs,bytes=0;
 	while( bytes<buf_size ){
 		res=ov_read( &vfile,(char *)buf+bytes,buf_size-bytes,ENDIAN,bits/8,SIGN,&bs );
-		if( res==0 ) break; // eof
-		if( res<0 ) continue;
+		if( res==0 ) break;
+		if( res==OV_HOLE ) continue;
+		if( res<0 ) break;
 
 		bytes+=res;
 	}
 	return bytes;
+}
+
+double OGGAudioStream::toSeconds( long pos ){
+	if( !frequency ) return 0;
+	return pos/(double)frequency;
 }

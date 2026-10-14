@@ -26,12 +26,15 @@ bb_float_t BBCALL bbCeil( bb_float_t n ){ return (bb_float_t)ceil(n); }
 bb_float_t BBCALL bbExp( bb_float_t n ){ return (bb_float_t)exp(n); }
 bb_float_t BBCALL bbLog( bb_float_t n ){ return (bb_float_t)log(n); }
 bb_float_t BBCALL bbLog10( bb_float_t n ){ return (bb_float_t)log10(n); }
+bb_float_t BBCALL bbMin( bb_float_t n,bb_float_t m ){ return n<m?n:m; }
+bb_float_t BBCALL bbMax( bb_float_t n,bb_float_t m ){ return n>m?n:m; }
+bb_float_t BBCALL bbClamp( bb_float_t v,bb_float_t lo,bb_float_t hi ){ return v<lo?lo:(v>hi?hi:v); }
+bb_int_t BBCALL bbIsNaN( bb_float_t n ){ return std::isnan(n); }
 
-//return rand float from 0...1
 static inline bb_float_t rnd(){
 	rnd_state=RND_A*(rnd_state%RND_Q)-RND_R*(rnd_state/RND_Q);
 	if( rnd_state<0 ) rnd_state+=RND_M;
-	return (bb_float_t)(rnd_state&65535)/65536.0+(.5/65536.0);
+	return (rnd_state&65535)/65536.0f+(.5f/65536.0f);
 }
 
 bb_float_t BBCALL bbRnd( bb_float_t from,bb_float_t to ){
@@ -51,8 +54,6 @@ void BBCALL bbSeedRnd( bb_int_t seed ){
 bb_int_t  BBCALL bbRndSeed(){
 	return rnd_state;
 }
-
-// math module entrypoints
 
 BBMODULE_CREATE( math ){
 	bbSeedRnd( 0x1234 );

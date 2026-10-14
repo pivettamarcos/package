@@ -12,8 +12,7 @@ public:
 protected:
   std::set<BBMesh*> mesh_set;
 
-  /***** GX INTERFACE *****/
-public:
+  public:
   enum{
     MAX_TEXTURES=	8
   };
@@ -64,7 +63,6 @@ public:
     }tex_states[MAX_TEXTURES];
   };
 
-  //state
   virtual int  hwTexUnits()=0;
   virtual int  gfxDriverCaps3D()=0;
 
@@ -72,6 +70,7 @@ public:
   virtual void setHWMultiTex( bool enable )=0;
   virtual void setDither( bool enable )=0;
   virtual void setAntialias( bool enable )=0;
+  virtual void setTextureLodBias( float bias ){}
   virtual void setWireframe( bool enable )=0;
   virtual void setFlippedTris( bool enable )=0;
   virtual void setAmbient( const float rgb[3] )=0;
@@ -89,22 +88,18 @@ public:
   virtual void setRenderState( const RenderState &state )=0;
 	bool setCamera( Camera *cam,BBCanvas *canvas );
 
-  //rendering
   virtual bool begin( const std::vector<BBLightRep*> &lights )=0;
   virtual void clear( const float rgb[3],float alpha,float z,bool clear_argb,bool clear_z )=0;
   virtual void render( BBMesh *mesh,int first_vert,int vert_cnt,int first_tri,int tri_cnt )=0;
   virtual void end()=0;
 
-  //lighting
   virtual BBLightRep *createLight( int flags )=0;
   virtual void freeLight( BBLightRep *l )=0;
 
-  //meshes
   virtual BBMesh *createMesh( int max_verts,int max_tris,int flags )=0;
   BBMesh *verifyMesh( BBMesh *m );
   void freeMesh( BBMesh *mesh );
 
-  //info
   virtual int getTrianglesDrawn()const=0;
 
 };

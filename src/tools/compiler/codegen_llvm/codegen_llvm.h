@@ -57,6 +57,7 @@ public:
 
 	llvm::GlobalVariable *bbData;
 	std::vector<llvm::Constant*> data_values;
+	std::vector<std::pair<size_t,llvm::Constant*>> data_str_fixups;
 
 	llvm::BasicBlock *getLabel( std::string &ident );
 	llvm::GlobalVariable *getArray( std::string &ident,int dims );

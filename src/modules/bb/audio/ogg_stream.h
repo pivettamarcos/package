@@ -8,6 +8,7 @@ class OGGAudioStream : public AudioStream{
 private:
 	OggVorbis_File vfile;
 	ov_callbacks callbacks;
+	bool opened;
 
 public:
 	static size_t oread( void *ptr, size_t size, size_t nmemb, void *datasource );
@@ -16,11 +17,14 @@ public:
 	static long otell( void *datasource );
 
 	OGGAudioStream( int buf_size );
+	~OGGAudioStream();
 	bool readHeader();
 
 	void seek( long pos );
 	long pos();
 	size_t decode();
+
+	double toSeconds( long pos );
 };
 
 

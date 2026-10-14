@@ -15,7 +15,6 @@ public:
 	Camera();
 	Camera *getCamera(){ return this; }
 
-	//called by user
 	void setZoom( float z );
 	void setRange( float nr,float fr );
 	void setFOV( float left,float right,float up,float down );
@@ -38,7 +37,6 @@ public:
 	float getFogFar();
 	int   getFogMode();
 
-	//Camera frustum...
 	float getFrustumNear()const;
 	float getFrustumFar()const;
 	float getFrustumWidth()const;

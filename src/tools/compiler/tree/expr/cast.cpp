@@ -61,8 +61,11 @@ TNode *CastNode::translate( Codegen *g ){
 llvm::Value *CastNode::translate2( Codegen_LLVM *g ){
 	llvm::Value *t=expr->translate2( g );
 	if( expr->sem_type==Type::float_type && sem_type==Type::int_type ){
-		//float->int
-		return g->builder->CreateFPToSI( t,g->intTy );
+		t=g->builder->CreateUnaryIntrinsic( llvm::Intrinsic::roundeven,t );
+		llvm::Value *sat=g->builder->CreateIntrinsic( llvm::Intrinsic::fptosi_sat,{ g->intTy,t->getType() },{ t } );
+		llvm::Value *invalid=g->builder->CreateFCmpUGE( t,llvm::ConstantFP::get( t->getType(),2147483648.0 ) );
+		llvm::Value *indef=llvm::ConstantInt::get( g->intTy,0x80000000U );
+		return g->builder->CreateSelect( invalid,indef,sat );
 	}
 	if( expr->sem_type==Type::int_type && sem_type==Type::float_type ){
 		//int->float

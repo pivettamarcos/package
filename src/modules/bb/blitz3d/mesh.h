@@ -4,10 +4,9 @@
 class BBMesh{
 public:
   virtual ~BBMesh();
-  virtual bool dirty()const=0; // TODO: figure out if this should be public
+  virtual bool dirty()const=0;
 
-  /***** GX INTERFACE *****/
-public:
+  public:
   virtual bool lock( bool all )=0;
   virtual void unlock()=0;
 

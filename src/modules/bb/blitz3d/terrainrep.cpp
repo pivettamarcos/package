@@ -13,7 +13,7 @@ static const TerrainRep *curr;
 static Frustum frustum;
 static int out_cnt,proc_cnt,clip_cnt;
 
-static float proj_epsilon=EPSILON;	//.01f;
+static float proj_epsilon=EPSILON;
 
 struct TerrainRep::Cell{
 	unsigned char height;
@@ -204,7 +204,6 @@ Vector TerrainRep::getNormal( int x,int z )const{
 void TerrainRep::insert( Tri *t ){
 	++proc_cnt;
 
-	//quicker clip check for 'thin' triangles...
 	if( t->id>=end_tri_id || !errors[t->id].error ){
 		if( t->clip & 63 ){
 			++clip_cnt;
@@ -226,7 +225,6 @@ void TerrainRep::insert( Tri *t ){
 		return;
 	}
 
-	//clip?
 	if( t->id<end_tri_id/2 && (t->clip & 63) ){
 		++clip_cnt;
 		Vector e0( verts[t->v0].v ),e1( verts[t->v1].v ),e2( verts[t->v2].v );
@@ -255,7 +253,7 @@ void TerrainRep::insert( Tri *t ){
 		tris.push_back( t );
 	}else{
 		Vector v=Vector( verts[t->v1].v+verts[t->v2].v )/2;
-//		float d=eye_plane.distance( v );
+
 		float d=eye_vec.distance( v );
 		if( d<EPSILON ) d=EPSILON;
 		t->proj_err=errors[t->id].error/d;
@@ -280,6 +278,7 @@ void TerrainRep::split( Tri *t ){
 		verts=d_new Vert[max_verts];
 		memcpy( verts,t,sizeof(Vert)*tv );
 		next_vert=verts+tv;
+		delete[] t;
 	}
 	Vert *vert=next_vert++;
 	vert->v.x=vert->x=(verts[t->v1].x+verts[t->v2].x)/2;
@@ -369,7 +368,6 @@ TerrainRep::Error TerrainRep::calcErr( int id,int x,int z,const Vert &v0,const V
 
 	if( id>=end_tri_id ) return et;
 
-	//is x/z inside this triangle?
 	int dx,dz;
 	dx=-(v1.z-v0.z);dz=(v1.x-v0.x);
 	if( (x-v0.x)*dx+(z-v0.z)*dz<0 ) return errors[id];
@@ -536,9 +534,6 @@ bool TerrainRep::collide( const Line &line,float radius,Collision *curr_coll,con
 	b.update( v2.v );
 
 	if( id>=end_tri_id || !errors[id].error ){
-		if( v0.v==v1.v || v0.v==v2.v || v1.v==v2.v ){
-			// _bbDebugLog( "OUCH!" );
-		}
 		return b.overlaps(box) ?
 		curr_coll->triangleCollide( line,radius,tform*v0.v,tform*v2.v,tform*v1.v )
 		: false;
@@ -568,7 +563,6 @@ bool TerrainRep::collide( const Line &line,float radius,Collision *curr_coll,con
 		collide( line,curr_coll,tform,3,v3,v0,v2,l );
 	}
 
-	//create local box
 	Box b( line );
 	b.expand( radius );
 	Box box=-tform * b;

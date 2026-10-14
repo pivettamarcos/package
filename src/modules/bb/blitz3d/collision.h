@@ -17,7 +17,6 @@ struct Collision{
 	bool update( const Line &line,float time,const Vector &normal );
 
 	bool sphereCollide( const Line &src_line,float src_radius,const Vector &dest,float dest_radius );
-	bool sphereCollide( const Line &line,float radius,const Vector &dest,const Vector &radii );
 
 	bool triangleCollide( const Line &src_line,float src_radius,const Vector &v0,const Vector &v1,const Vector &v2 );
 

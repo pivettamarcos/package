@@ -213,7 +213,7 @@ llvm::Value *Node::compare2( int op,llvm::Value *l,llvm::Value *r,Type *ty,Codeg
 		case LE :n=llvm::CmpInst::FCMP_OLE;break;case GE :n=llvm::CmpInst::FCMP_OGE;break;
 		}
 
-		if( r==0 ) r=llvm::ConstantFP::get( Type::float_type->llvmType( g->context.get() ),llvm::APFloat(0.0) );
+		if( r==0 ) r=llvm::ConstantFP::get( Type::float_type->llvmType( g->context.get() ),0.0 );
 
 		return g->builder->CreateFCmp( n,l,r );
 	}else{

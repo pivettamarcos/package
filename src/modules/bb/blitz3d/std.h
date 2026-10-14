@@ -2,8 +2,6 @@
 #ifndef B3DSTD_H
 #define B3DSTD_H
 
-#pragma warning( disable:4786 )
-
 #include "../config.h"
 #include "../stdutil/stdutil.h"
 

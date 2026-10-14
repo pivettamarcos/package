@@ -25,14 +25,11 @@ public:
 	Object( const Object &object );
 	~Object();
 
-	//Entity interface
 	Object *getObject(){ return this; }
 	Entity *clone(){ return d_new Object( *this ); }
 
-	//deep object copy!
 	Object *copy();
 
-	//called by user
 	void reset();
 	void setCollisionType( int type );
 	void setCollisionRadii( const Vector &radii );
@@ -45,19 +42,16 @@ public:
 
 	BBChannel *emitSound( BBSound *sound );
 
-	//overridables!
 	virtual bool collide( const Line &line,float radius,::Collision *curr_coll,const Transform &t ){ return false; }
 	virtual void capture();
 	virtual void animate( float e );
 	virtual bool beginRender( float tween );
 	virtual void endRender();
 
-	//for use by world
 	void beginUpdate( float elapsed );
 	void addCollision( const ObjCollision *c );
 	void endUpdate();
 
-	//accessors
 	int getCollisionType()const;
 	const Vector &getCollisionRadii()const;
 	const Box &getCollisionBox()const;

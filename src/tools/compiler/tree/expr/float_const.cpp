@@ -1,5 +1,7 @@
 #include "float_const.h"
 
+#include <cmath>
+
 ////////////////////
 // Float constant //
 ////////////////////
@@ -24,7 +26,7 @@ int FloatConstNode::intValue(){
 	_control87( _CW_DEFAULT,0xfffff );
 	return temp;
 #else
-	return value;
+	return (int)::rintf( value );
 #endif
 }
 
@@ -38,7 +40,7 @@ std::string FloatConstNode::stringValue(){
 
 #ifdef USE_LLVM
 llvm::Value *FloatConstNode::translate2( Codegen_LLVM *g ){
-	return llvm::ConstantFP::get( *g->context,llvm::APFloat( (double)value ) );
+	return llvm::ConstantFP::get( Type::float_type->llvmType( g->context.get() ),(double)value );
 }
 #endif
 

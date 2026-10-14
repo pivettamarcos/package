@@ -1,21 +1,18 @@
 
 #include "std.h"
 
-#ifdef PRO
 #include "blitz3d.h"
 #include <bb/system/system.h>
 #include <bb/graphics/graphics.h>
 #include <bb/pixmap/pixmap.h>
-#include "blitz3d.h"
-#ifdef USE_D3DXOF
-#include "loader_x.h"
-#else
 #include "loader_x2.h"
-#endif
 #include "loader_3ds.h"
 #include "loader_b3d.h"
-#include "std.h"
 #include "graphics.h"
+#include <bb/filesystem/filesystem.h>
+#ifdef BB_EMSCRIPTEN
+#include <emscripten.h>
+#endif
 
 B3DGraphics *bbSceneDriver;
 BBScene *bbScene;
@@ -29,12 +26,8 @@ static std::set<Entity*> entity_set;
 
 static Listener *listener;
 
-static bool stats_mode;
-
-//converts 0...255 color to 0...1
 static const float ctof=1.0f/255.0f;
 
-//degrees to radians and back
 static const float dtor=0.0174532925199432957692369076848861f;
 static const float rtod=1/dtor;
 
@@ -44,11 +37,7 @@ static ObjCollision picked;
 
 extern float stats3d[10];
 
-#ifdef USE_D3DXOF
-static Loader_X loader_x;
-#else
 static Loader_X2 loader_x;
-#endif
 static Loader_3DS loader_3ds;
 static Loader_B3D loader_b3d;
 
@@ -145,6 +134,17 @@ static inline void debugVertex( Surface *s,int n,int t ){
 
 static Entity *loadEntity( std::string t,int hint ){
 	t=canonicalpath(t);
+#ifdef BB_EMSCRIPTEN
+	{
+		FILE *probe=fopen( t.c_str(),"rb" );
+		if( probe ){
+			fclose( probe );
+		}else{
+			std::string real=bbResolveExistingPath( t );
+			if( !real.empty() ) t=real;
+		}
+	}
+#endif
 	int n=t.rfind( "." );if( n==std::string::npos ) return 0;
 	std::string ext=tolower( t.substr( n+1 ) );
 	MeshLoader *l;
@@ -160,11 +160,6 @@ static Entity *loadEntity( std::string t,int hint ){
 	Entity *e=l->load( t,conv,hint );
 	CachedTexture::setPath( "" );
 
-	// if( e ){
-	// 	LOGD( "[blitz3d] Loaded %s", t.c_str() );
-	// }else{
-	// 	LOGD( "[blitz3d] Failed to load %s", t.c_str() );
-	// }
 
 	return e;
 }
@@ -214,9 +209,6 @@ static Entity *findChild( Entity *e,const std::string &t ){
 	return 0;
 }
 
-///////////////////////////
-// GLOBAL WORLD COMMANDS //
-///////////////////////////
 BBLIB void BBCALL bbLoaderMatrix( BBStr *ext,bb_float_t xx,bb_float_t xy,bb_float_t xz,bb_float_t yx,bb_float_t yy,bb_float_t yz,bb_float_t zx,bb_float_t zy,bb_float_t zz ){
 	loader_mat_map.erase( *ext );
 	loader_mat_map[*ext]=Transform(Matrix(Vector(xx,xy,xz),Vector(yx,yy,yz),Vector(zx,zy,zz)));
@@ -274,19 +266,9 @@ BBLIB void BBCALL bbCollisions( bb_int_t src_type,bb_int_t dest_type,bb_int_t me
 	world->addCollision( src_type,dest_type,method,response );
 }
 
-static int update_ms;
-
 BBLIB void BBCALL bbUpdateWorld( bb_float_t elapsed ){
 	debug3d();
-
-#ifndef BETA
 	world->update( elapsed );
-	return;
-#else
-	update_ms=bbMilliSecs();
-	world->update( elapsed );
-	update_ms=bbMilliSecs()-update_ms;
-#endif
 }
 
 BBLIB void BBCALL bbCaptureWorld(){
@@ -296,52 +278,9 @@ BBLIB void BBCALL bbCaptureWorld(){
 
 BBLIB void BBCALL bbRenderWorld( bb_float_t tween ){
 	debug3d();
-
-#ifndef BETA
 	tri_count=bbScene->getTrianglesDrawn();
 	world->render( tween );
 	tri_count=bbScene->getTrianglesDrawn()-tri_count;
-	return;
-#else
-
-	int tris=bbScene->getTrianglesDrawn();
-	int render_ms=bbMilliSecs();
-	world->render( tween );
-	render_ms=bbMilliSecs()-render_ms;
-
-BBLIB 	extern bb_int_t BBCALL bbKeyHit(bb_int_t);
-BBLIB 	extern void BBCALL bbDelay(bb_int_t);
-	bbDelay(0);
-	if( bbKeyHit( 0x57 ) ){
-		stats_mode=!stats_mode;
-	}
-	if( bbKeyHit( 0x58 ) ){
-		static int n;
-		string t="screenshot"+itoa(++n)+".bmp";
-		bbSaveBuffer( bbBackBuffer(),d_new BBStr(t) );
-	}
-
-	if( !stats_mode ) return;
-
-	tris=bbScene->getTrianglesDrawn()-tris;
-
-	static int time;
-	int frame_ms=bbMilliSecs()-time;
-	time+=frame_ms;
-
-	int fps=frame_ms ? 1000/frame_ms : 1000;
-	int ups=update_ms ? 1000/update_ms : 1000;
-	int rps=render_ms ? 1000/render_ms : 1000;
-
-	string t_fps="000"+itoa(fps);t_fps=t_fps.substr( t_fps.size()-4 );
-	string t_ups="000"+itoa(ups);t_ups=t_ups.substr( t_ups.size()-4 );
-	string t_rps="000"+itoa(rps);t_rps=t_rps.substr( t_rps.size()-4 );
-	string t_tris="00000"+itoa(tris);t_tris=t_tris.substr( t_tris.size()-6 );
-
-	string t="FPS:"+t_fps+" UPS:"+t_ups+" RPS:"+t_rps+" TRIS:"+t_tris;
-
-	bbText( 0,bbGraphicsHeight()-bbFontHeight(),d_new BBStr(t),0,0 );
-#endif
 }
 
 BBLIB bb_int_t BBCALL bbTrisRendered(){
@@ -352,12 +291,7 @@ BBLIB bb_float_t BBCALL bbStats3D( bb_int_t n ){
 	return stats3d[n];
 }
 
-//////////////////////
-// TEXTURE COMMANDS //
-//////////////////////
 
-//Note: modify canvas->backup() to NOT release backup image!
-//
 BBLIB Texture * BBCALL bbLoadTexture( BBStr *file,bb_int_t flags ){
 	debug3d();
 	Texture *t=d_new Texture( canonicalpath(*file),flags );delete file;
@@ -399,6 +333,22 @@ BBLIB void BBCALL bbFreeTexture( Texture *t ){
 BBLIB void BBCALL bbTextureBlend( Texture *t,bb_int_t blend ){
 	debugTexture(t);
 	t->setBlend( blend );
+}
+
+BBLIB void BBCALL bbTextureBumpEnvMat( Texture *t,bb_int_t x,bb_int_t y,bb_float_t envmat ){
+	debugTexture(t);
+}
+
+BBLIB void BBCALL bbTextureBumpEnvScale( Texture *t,bb_float_t envscale ){
+	debugTexture(t);
+}
+
+BBLIB void BBCALL bbTextureBumpEnvOffset( Texture *t,bb_float_t envoffset ){
+	debugTexture(t);
+}
+
+BBLIB void BBCALL bbTextureLodBias( bb_float_t bias ){
+	bbScene->setTextureLodBias( bias );
 }
 
 BBLIB void BBCALL bbTextureCoords( Texture *t,bb_int_t flags ){
@@ -452,19 +402,11 @@ BBLIB void BBCALL bbSetCubeMode( Texture *t,bb_int_t mode ){
 }
 
 BBLIB BBCanvas * BBCALL bbTextureBuffer( Texture *t,bb_int_t frame ){
-	//v1.04
 	debugTexture(t);
 	if( BBCanvas *c=t->getCanvas( frame ) ){
 		if( c->getDepth() ) return c;
 	}
 	return 0;
-	/*
-	//v1.03  crashes if t->getCanvas returns null!
-	debugTexture(t);
-	gxCanvas *c=t->getCanvas( frame );
-	if( c->getDepth() ) return c;
-	return 0;
-	*/
 }
 
 BBLIB void BBCALL bbClearTextureFilters(){
@@ -478,9 +420,6 @@ BBLIB void BBCALL bbTextureFilter( BBStr *t,bb_int_t flags ){
 	delete t;
 }
 
-////////////////////
-// BRUSH COMMANDS //
-////////////////////
 BBLIB Brush * BBCALL bbCreateBrush( bb_float_t r,bb_float_t g,bb_float_t b ){
 	debug3d();
 	Brush *br=d_new Brush();
@@ -581,9 +520,6 @@ BBLIB bb_int_t BBCALL bbGetBrushFX( Brush *b ){
 	return b->getFX( );
 }
 
-///////////////////
-// MESH COMMANDS //
-///////////////////
 BBLIB Entity * BBCALL bbCreateMesh( Entity *p ){
 	debugParent(p);
 	MeshModel *m=d_new MeshModel();
@@ -758,9 +694,6 @@ BBLIB void BBCALL bbMeshCullBox( MeshModel *m,bb_float_t x,bb_float_t y,bb_float
 }
 
 
-//////////////////////
-// SURFACE COMMANDS //
-//////////////////////
 BBLIB Surface * BBCALL bbFindSurface( MeshModel *m,Brush *b ){
 	if( bb_env.debug ){ debugMesh(m);debugBrush(b); }
 	return m->findSurface(*b);
@@ -895,9 +828,6 @@ BBLIB bb_int_t BBCALL bbTriangleVertex( Surface *s,bb_int_t n,bb_int_t v ){
 	return s->getTriangle(n).verts[v];
 }
 
-/////////////////////
-// CAMERA COMMANDS //
-/////////////////////
 BBLIB Entity * BBCALL bbCreateCamera( Entity *p ){
 	debugParent(p);
 	int x,y,w,h;
@@ -970,7 +900,6 @@ BBLIB bb_int_t BBCALL bbCameraProject( Camera *c,bb_float_t x,bb_float_t y,bb_fl
 		int vp_x,vp_y,vp_w,vp_h;
 		c->getViewport( &vp_x,&vp_y,&vp_w,&vp_h );
 		float nr=c->getFrustumNear();
-		float fr=c->getFrustumFar();
 		float nr_w=c->getFrustumWidth();
 		float nr_h=c->getFrustumHeight();
 		projected=Vector( (v.x/nr_w+.5f)*vp_w,(.5f-v.y/nr_h)*vp_h,nr );
@@ -982,7 +911,6 @@ BBLIB bb_int_t BBCALL bbCameraProject( Camera *c,bb_float_t x,bb_float_t y,bb_fl
 			int vp_x,vp_y,vp_w,vp_h;
 			c->getViewport( &vp_x,&vp_y,&vp_w,&vp_h );
 			float nr=c->getFrustumNear();
-			float fr=c->getFrustumFar();
 			float nr_w=c->getFrustumWidth();
 			float nr_h=c->getFrustumHeight();
 			projected=Vector(
@@ -1027,7 +955,7 @@ BBLIB Entity * BBCALL bbCameraPick( Camera *c,bb_float_t x,bb_float_t y ){
 
 	Line l;
 	if( c->getProjMode()==Camera::PROJ_ORTHO ){
-		l=c->getWorldTform() * Line( Vector(x,y,0),Vector(0,0,fr) );	//x,y,fr) );
+		l=c->getWorldTform() * Line( Vector(x,y,0),Vector(0,0,fr) );
 	}else{
 		x/=nr;y/=nr;
 		l=c->getWorldTform() * Line( Vector(),Vector( x*fr,y*fr,fr ) );
@@ -1115,9 +1043,6 @@ BBLIB bb_int_t BBCALL bbPickedTriangle(){
 	return picked.collision.index;
 }
 
-////////////////////
-// LIGHT COMMANDS //
-////////////////////
 BBLIB Entity * BBCALL bbCreateLight( bb_int_t type,Entity *p ){
 	debugParent(p);
 	Light *t=d_new Light( type );
@@ -1145,18 +1070,12 @@ BBLIB void BBCALL bbLightConeAngles( Light *light,bb_float_t inner,bb_float_t ou
 	light->setConeAngles( inner,outer );
 }
 
-////////////////////
-// PIVOT COMMANDS //
-////////////////////
 BBLIB Entity * BBCALL bbCreatePivot( Entity *p ){
 	debugParent(p);
 	Pivot *t=d_new Pivot();
 	return insertEntity( t,p );
 }
 
-/////////////////////
-// SPRITE COMMANDS //
-/////////////////////
 BBLIB Entity * BBCALL bbCreateSprite( Entity *p ){
 	debugParent(p);
 	Sprite *s=d_new Sprite();
@@ -1199,18 +1118,12 @@ BBLIB void BBCALL bbSpriteViewMode( Sprite *s,bb_int_t mode ){
 	s->setViewmode( mode );
 }
 
-/////////////////////
-// MIRROR COMMANDS //
-/////////////////////
 BBLIB Entity * BBCALL bbCreateMirror( Entity *p ){
 	debugParent(p);
 	Mirror *t=d_new Mirror();
 	return insertEntity( t,p );
 }
 
-////////////////////
-// PLANE COMMANDS //
-////////////////////
 BBLIB Entity * BBCALL bbCreatePlane( bb_int_t segs,Entity *p ){
 	if( bb_env.debug ){
 		debugParent(p);
@@ -1220,9 +1133,6 @@ BBLIB Entity * BBCALL bbCreatePlane( bb_int_t segs,Entity *p ){
 	return insertEntity( t,p );
 }
 
-//////////////////
-// MD2 COMMANDS //
-//////////////////
 BBLIB Entity * BBCALL bbLoadMD2( BBStr *file,Entity *p ){
 	debugParent(p);
 	MD2Model *t=d_new MD2Model( canonicalpath(*file) );delete file;
@@ -1250,9 +1160,6 @@ BBLIB bb_int_t BBCALL bbMD2Animating( MD2Model *m ){
 	return m->getMD2Animating();
 }
 
-//////////////////
-// BSP Commands //
-//////////////////
 BBLIB Entity * BBCALL bbLoadBSP( BBStr *file,bb_float_t gam,Entity *p ){
 	debugParent(p);
 	CachedTexture::setPath( filenamepath( *file ) );
@@ -1274,9 +1181,6 @@ BBLIB void BBCALL bbBSPLighting( Q3BSPModel *t,bb_int_t lmap ){
 	t->setLighting( !!lmap );
 }
 
-//////////////////////
-// TERRAIN COMMANDS //
-//////////////////////
 static float terrainHeight( Terrain *t,bb_float_t x,bb_float_t z ){
 	int ix=floor(x);
 	int iz=floor(z);
@@ -1367,9 +1271,6 @@ BBLIB void BBCALL bbModifyTerrain( Terrain *t,bb_int_t x,bb_int_t z,bb_float_t h
 	t->setHeight( x,z,h,!!realtime );
 }
 
-////////////////////
-// AUDIO COMMANDS //
-////////////////////
 BBLIB Entity * BBCALL bbCreateListener( Entity *p,bb_float_t roll,bb_float_t dopp,bb_float_t dist ){
 	if( bb_env.debug ){
 		debugParent(p);
@@ -1387,9 +1288,6 @@ BBLIB BBChannel * BBCALL bbEmitSound( BBSound *sound,Object *o ){
 	return o->emitSound( sound );
 }
 
-/////////////////////
-// ENTITY COMMANDS //
-/////////////////////
 BBLIB Entity * BBCALL bbCopyEntity( Entity *e,Entity *p ){
 	if( bb_env.debug ){
 		debugEntity(e);
@@ -1468,9 +1366,6 @@ BBLIB Entity * BBCALL bbFindChild( Entity *e,BBStr *t ){
 	return e;
 }
 
-////////////////////////
-// ANIMATION COMMANDS //
-////////////////////////
 BBLIB bb_int_t BBCALL bbLoadAnimSeq( Object *o,BBStr *f ){
 	debugObject( o );
 	if( Animator *anim=o->getAnimator() ){
@@ -1561,9 +1456,6 @@ BBLIB bb_int_t BBCALL bbAnimating( Object *o ){
 	return 0;
 }
 
-////////////////////////////////
-// ENTITY SPECIAL FX COMMANDS //
-////////////////////////////////
 BBLIB void BBCALL bbPaintEntity( Model *m,Brush *b ){
 	if( bb_env.debug ){
 		debugModel(m);
@@ -1589,7 +1481,7 @@ BBLIB void BBCALL bbEntityShininess( Model *m,bb_float_t shininess ){
 
 BBLIB void BBCALL bbEntityTexture( Model *m,Texture *t,bb_int_t frame,bb_int_t index ){
 	debugModel(m);
-	debugTexture(t);
+	if( !m || !t || !texture_set.count( t ) ) return;
 	m->setTexture( index,*t,frame );
 }
 
@@ -1618,9 +1510,6 @@ BBLIB void BBCALL bbEntityOrder( Object *o,bb_int_t n ){
 	o->setOrder( n );
 }
 
-//////////////////////////////
-// ENTITY PROPERTY COMMANDS //
-//////////////////////////////
 BBLIB bb_float_t BBCALL bbEntityX( Entity *e,bb_int_t global ){
 	debugEntity(e);
 	return global ? e->getWorldPosition().x : e->getLocalPosition().x;
@@ -1725,9 +1614,6 @@ BBLIB bb_float_t BBCALL bbDeltaPitch( Entity *src,Entity *dest ){
 	return d*rtod;
 }
 
-///////////////////////////////
-// ENTITY COLLISION COMMANDS //
-///////////////////////////////
 BBLIB void BBCALL bbResetEntity( Object *o ){
 	debugObject(o);
 	o->reset();
@@ -1848,15 +1734,12 @@ BBLIB bb_int_t BBCALL bbCollisionTriangle( Object *o,bb_int_t index ){
 	return o->getCollisions()[index-1]->collision.index;
 }
 
-BBLIB bb_float_t BBCALL BBCALL bbEntityDistance( Entity *src,Entity *dest ){
+BBLIB bb_float_t BBCALL bbEntityDistance( Entity *src,Entity *dest ){
 	debugEntity(src);
 	debugEntity(dest);
 	return src->getWorldPosition().distance( dest->getWorldPosition() );
 }
 
-////////////////////////////////////
-// ENTITY TRANSFORMATION COMMANDS //
-////////////////////////////////////
 BBLIB void BBCALL bbMoveEntity( Entity *e,bb_float_t x,bb_float_t y,bb_float_t z ){
 	debugEntity(e);
 	e->setLocalPosition( e->getLocalPosition()+e->getLocalRotation()*Vector(x,y,z) );
@@ -1928,9 +1811,6 @@ BBLIB void BBCALL bbAlignToVector( Entity *e,bb_float_t nx,bb_float_t ny,bb_floa
 	e->setWorldRotation( Quat( cosf(an),cp*sinf(an) ) * q );
 }
 
-//////////////////////////
-// ENTITY MISC COMMANDS //
-//////////////////////////
 BBLIB void BBCALL bbNameEntity( Entity *e,BBStr *t ){
 	debugEntity(e);
 	e->setName( *t );
@@ -1979,6 +1859,7 @@ BBLIB bb_int_t BBCALL bbActiveTextures(){
 }
 
 void blitz3d_open( BBGraphics *graphics ){
+	if( !bbSceneDriver ) RTEX( "no 3D support on this renderer" );
 	bbScene=bbSceneDriver->createScene( graphics->getLogicalWidth(),graphics->getLogicalHeight(),graphics->getDensity(),0 );
 	if( !bbScene ) RTEX( "Unable to create 3D Scene" );
 	world=d_new World();
@@ -1991,7 +1872,6 @@ void blitz3d_open( BBGraphics *graphics ){
 	loader_mat_map["x"]=Transform();
 	loader_mat_map["3ds"]=Transform(Matrix(Vector(1,0,0),Vector(0,0,1),Vector(0,1,0)));
 	listener=0;
-	stats_mode=false;
 }
 
 void blitz3d_close(){
@@ -2013,5 +1893,3 @@ BBMODULE_DESTROY( blitz3d ){
 	blitz3d_close();
 	return true;
 }
-
-#endif

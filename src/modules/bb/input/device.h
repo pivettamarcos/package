@@ -25,14 +25,13 @@ protected:
 	enum{
 		QUE_SIZE=32,QUE_MASK=QUE_SIZE-1
 	};
-	int hit_count[256];			//how many hits of key
-	bool down_state[256];			//time key went down
+	int hit_count[256];
+	bool down_state[256];
 	int que[QUE_SIZE],put,get;
 
 protected:
 	char id[64],name[64];
 
-	/***** GX INTERFACE *****/
 public:
 	void flush();
 

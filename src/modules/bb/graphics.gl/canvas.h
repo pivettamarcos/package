@@ -12,6 +12,7 @@ protected:
 
 	int width,height;
 	mutable unsigned char *pixels;
+	mutable int lock_count;
 	BBImageFont *font;
 
 	unsigned framebuffer, mode;
@@ -38,7 +39,7 @@ public:
 	GLenum target;
 
 	unsigned int texture,depthbuffer;
-	int twidth,theight;
+	int applied_params=-1;
 
 	void uploadData();
 	void downloadData();
@@ -51,10 +52,12 @@ public:
 	void unset();
 	void bind();
 
+	bool isDirty()const{ return dirty; }
+	void applyTexParams( int want );
+
 	unsigned int textureId();
 	unsigned int framebufferId();
 
-	//MANIPULATORS
 	void setFont( BBFont *f );
 	void setMask( unsigned argb );
 	void setColor( unsigned argb );
@@ -76,6 +79,9 @@ public:
 	bool collide( int x,int y,const BBCanvas *src,int src_x,int src_y,bool solid );
 	bool rect_collide( int x,int y,int rect_x,int rect_y,int rect_w,int rect_h,bool solid );
 
+	BBPixmap *getPixmap(){ return pixmap; }
+	bool stretchTo( BBCanvas *dest,bool filter );
+
 	bool lock();
 	void setPixel( int x,int y,unsigned argb );
 	void setPixelFast( int x,int y,unsigned argb );
@@ -88,7 +94,6 @@ public:
 	void setCubeMode( int mode );
 	void setCubeFace( int face );
 
-	//ACCESSORS
 	int getWidth()const;
 	int getHeight()const;
 	int getDepth()const;

@@ -6,8 +6,48 @@
 #include <streambuf>
 #include <string>
 #include <set>
+#include <cstring>
+#include <dirent.h>
+#include <sys/stat.h>
+
+static std::string bbResolvePath( std::string want ){
+	if( want.empty() ) return "";
+	for( char &c : want ) if( c=='\\' ) c='/';
+	{ struct stat st; if( stat( want.c_str(),&st )==0 ) return want; }
+	std::string cur = want.size() && want[0]=='/' ? "/" : ".";
+	size_t i = (want.size() && want[0]=='/') ? 1 : 0;
+	while( i < want.size() ){
+		size_t slash = want.find( '/',i );
+		std::string comp = want.substr( i, slash==std::string::npos ? std::string::npos : slash-i );
+		if( comp.empty() || comp=="." ){ if(slash==std::string::npos)break; i=slash+1; continue; }
+		std::string next = (cur=="/"?"":cur) + "/" + comp;
+		struct stat st;
+		if( stat( next.c_str(),&st )!=0 ){
+			DIR *d = opendir( cur.c_str() );
+			bool found=false;
+			if( d ){
+				struct dirent *e;
+				while( (e=readdir(d)) ){
+					if( strcasecmp( e->d_name,comp.c_str() )==0 ){
+						next = (cur=="/"?"":cur) + "/" + e->d_name; found=true; break;
+					}
+				}
+				closedir( d );
+			}
+			if( !found ) return "";
+		}
+		cur = next;
+		if( slash==std::string::npos ) break;
+		i = slash+1;
+	}
+	return cur;
+}
 
 BBFileSystem *gx_filesys;
+
+std::string bbResolveExistingPath( const std::string &want ){
+	return bbResolvePath( want );
+}
 
 BBDir::~BBDir(){
 }
@@ -16,10 +56,12 @@ BBFileSystem::~BBFileSystem(){
 }
 
 std::streambuf *BBFileSystem::openFile( const std::string &file,std::ios_base::openmode n ){
+	std::string path=file;
+	for( char &c : path ) if( c=='\\' ) c='/';
 	std::filebuf *buf=d_new std::filebuf();
-	if( buf->open( file.c_str(),n|std::ios_base::binary ) ){
-		return buf;
-	}
+	if( buf->open( path.c_str(),n|std::ios_base::binary ) ) return buf;
+	std::string real = bbResolvePath( file );
+	if( !real.empty() && buf->open( real.c_str(),n|std::ios_base::binary ) ) return buf;
 	delete buf;
 	return 0;
 }
@@ -55,7 +97,7 @@ static inline void debugFileSys(){
 
 static inline void debugFile( BBFile *f ){
 	if( bb_env.debug ){
-		if( !file_set.count( f ) ) RTEX( "File does not exist" );
+		if( f && !file_set.count( f ) ) RTEX( "File does not exist" );
 	}
 }
 
@@ -67,6 +109,7 @@ static inline void debugDir( BBDir *d ){
 
 static BBFile *open( BBStr *f,std::ios_base::openmode n ){
 	std::string t=canonicalpath( *f );
+	delete f;
 	std::streambuf *buf=gx_filesys->openFile( t,n );
 	if( buf ){
 		BBFile *f=d_new BBFile( buf );
@@ -90,21 +133,26 @@ BBFile* BBCALL bbOpenFile( BBStr *f ){
 
 void BBCALL bbCloseFile( BBFile *f ){
 	debugFile( f );
+	if( !f ) return;
 	file_set.erase( f );
 	delete f;
 }
 
 bb_int_t BBCALL bbFilePos( BBFile *f ){
+	if( !f ) return 0;
 	return f->buf->pubseekoff( 0,std::ios_base::cur );
 }
 
 bb_int_t BBCALL bbSeekFile( BBFile *f,bb_int_t pos ){
+	if( !f ) return 0;
 	return f->buf->pubseekoff( pos,std::ios_base::beg );
 }
 
 BBDir* BBCALL bbReadDir( BBStr *d ){
 	std::string t=*d;delete d;
-	return gx_filesys->openDir( t,0 );
+	std::string real=bbResolvePath( t );
+	if( real.empty() ){ real=t; for( char &c : real ) if( c=='\\' ) c='/'; }
+	return gx_filesys->openDir( real,0 );
 }
 
 void BBCALL bbCloseDir( BBDir *d ){
@@ -112,6 +160,7 @@ void BBCALL bbCloseDir( BBDir *d ){
 }
 
 BBStr* BBCALL bbNextFile( BBDir *d ){
+	if( !d ) return d_new BBStr( "" );
 	debugDir( d );
 	return d_new BBStr( d->getNextFile() );
 }
@@ -143,13 +192,19 @@ bb_int_t BBCALL bbFileType( BBStr *f ){
 	std::string t=*f;delete f;
 	debugFileSys();
 	int n=gx_filesys->getFileType( t );
+	if( n==BBFileSystem::FILE_TYPE_NONE ){
+		std::string real=bbResolvePath( t );
+		if( !real.empty() ) n=gx_filesys->getFileType( real );
+	}
 	return n==BBFileSystem::FILE_TYPE_FILE ? 1 : (n==BBFileSystem::FILE_TYPE_DIR ? 2 : 0);
 }
 
 bb_int_t BBCALL bbFileSize( BBStr *f ){
 	std::string t=*f;delete f;
 	debugFileSys();
-	return gx_filesys->getFileSize( t );
+	bb_int_t sz=gx_filesys->getFileSize( t );
+	if( sz<=0 ){ std::string real=bbResolvePath( t ); if( !real.empty() ) sz=gx_filesys->getFileSize( real ); }
+	return sz;
 }
 
 void BBCALL bbCopyFile( BBStr *f,BBStr *to ){

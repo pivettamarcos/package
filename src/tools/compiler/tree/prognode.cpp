@@ -242,6 +242,14 @@ void ProgNode::translate2( Codegen_LLVM *g,const std::vector<UserFunc> &userfunc
 
 	g->builder->SetInsertPoint( block );
 
+	for( auto &fx : g->data_str_fixups ){
+		llvm::Value *idx[2]={ g->constantInt( 0 ),
+			llvm::ConstantInt::get( g->intTy,(uint64_t)fx.first ) };
+		llvm::Value *slot=g->builder->CreateGEP( g->bbData->getValueType(),g->bbData,idx );
+		llvm::Value *asInt=g->builder->CreatePtrToInt( fx.second,g->intTy );
+		g->builder->CreateStore( asInt,slot );
+	}
+
 	g->restoreData( 0 ); // reset data pointer
 
 	createVars2( sem_env,g );

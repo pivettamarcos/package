@@ -5,7 +5,7 @@
 #include "camera.h"
 #include "scene.h"
 
-static Vector vts[17][17];
+static Vector vts[21][21];
 
 struct PlaneModel::Rep{
 

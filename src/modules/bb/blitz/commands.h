@@ -17,10 +17,6 @@ void BBCALL bbEnd(  );
 void BBCALL bbAppTitle( BBStr *title,BBStr *close_prompt );
 BBStr * BBCALL bbCommandLine(  );
 
-//symbols
-
-//debug
-
 #ifdef __cplusplus
 }
 #endif

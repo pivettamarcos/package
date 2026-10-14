@@ -14,6 +14,9 @@ void BBCALL bbShowPointer(  );
 void BBCALL bbHidePointer(  );
 void BBCALL bbRuntimeError( BBStr *message );
 void BBCALL bbMoveMouse( bb_int_t x,bb_int_t y );
+void BBCALL bbInitErrorMsgs( bb_int_t number,bb_int_t hasMacro );
+void BBCALL bbSetErrorMsg( bb_int_t pos,BBStr *message );
+void BBCALL bbMemoryAccessViolation(  );
 
 #ifdef __cplusplus
 }

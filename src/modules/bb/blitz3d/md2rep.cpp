@@ -63,19 +63,26 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 	in=gx_filesys->openFile( f,std::ios_base::in );
 	if( !in ) return;
 
-	if( in->sgetn( (char*)&header,sizeof(header) )!=sizeof(header) ) return;
-	if( header.magic!='2PDI' || header.version!=8 ) return;
+	if( in->sgetn( (char*)&header,sizeof(header) )!=sizeof(header) ){
+		delete in;
+		return;
+	}
+	if( header.magic!='2PDI' || header.version!=8 ||
+		header.numFrames<=0 || header.numTriangles<=0 ||
+		header.numTexCoords<=0 || header.numVertices<=0 ||
+		header.skinWidth<=0 || header.skinHeight<=0 ){
+		delete in;
+		return;
+	}
 
 	n_frames=header.numFrames;
 	n_tris=header.numTriangles;
 
-	//read in tex coords
 	std::vector<md2_uv> md2_uvs;
 	md2_uvs.resize( header.numTexCoords );
 	in->pubseekpos( header.offsetTexCoords );
 	in->sgetn( (char*)&md2_uvs[0],header.numTexCoords*sizeof(md2_uv) );
 
-	//read in triangles
 	std::vector<md2_tri> md2_tris;
 	md2_tris.resize( n_tris );
 	in->pubseekpos( header.offsetTriangles );
@@ -92,18 +99,16 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 			t_vert t;
 			t.i=md2_tris[k].verts[j];
 			t.uv=md2_tris[k].uvs[j];
+			if( t.i>=header.numVertices || t.uv>=header.numTexCoords ){ t.i=0;t.uv=0; }
 			std::map<t_vert,int>::iterator it=t_map.find( t );
 			if( it==t_map.end() ){
-				//create new vert
 				tr.verts[j]=t_map[t]=t_verts.size();
 				t_verts.push_back( t );
-				//add UVs
 				VertexUV uv;
 				uv.u=md2_uvs[t.uv].u/(float)(header.skinWidth);
 				uv.v=md2_uvs[t.uv].v/(float)(header.skinHeight);
 				uvs.push_back( uv );
 			}else{
-				//reuse vert
 				tr.verts[j]=it->second;
 			}
 		}
@@ -117,7 +122,6 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 	std::vector<md2_vert> md2_verts;
 	md2_verts.resize( header.numVertices );
 
-	//read in frames
 	for( k=0;k<n_frames;++k ){
 		char t_buff[16];
 		Frame *fr=&frames[k];
@@ -128,7 +132,6 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 		fr->scale=Vector( fr->scale.y,fr->scale.z,fr->scale.x );
 		fr->trans=Vector( fr->trans.y,fr->trans.z,fr->trans.x );
 
-		//read vertices
 		in->sgetn( (char*)&md2_verts[0],header.numVertices*sizeof(md2_vert) );
 
 		fr->verts.resize( n_verts );
@@ -139,14 +142,13 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 			v->x=mv.y;
 			v->y=mv.z;
 			v->z=mv.x;
-			v->n=mv.n;
+			v->n=mv.n<162 ? mv.n : 0;
 			box.update( Vector( v->x,v->y,v->z ) * fr->scale + fr->trans );
 		}
 	}
 
 	delete in;
 
-	//create mesh and setup tris
 	mesh=bbScene->createMesh( n_verts,n_tris,0 );
 	mesh->lock( true );
 	for( k=0;k<n_tris;++k ){
@@ -155,7 +157,6 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 	}
 	mesh->unlock();
 
-	//build normals
 	if( !normals ){
 		normals=(Vector*)md2norms;
 		for( int k=0;k<sizeof(md2norms)/12;++k ){
@@ -167,20 +168,6 @@ mesh(0),n_verts(0),n_tris(0),n_frames(0){
 MD2Rep::~MD2Rep(){
 	if( mesh ) bbScene->freeMesh( mesh );
 }
-
-/*
-void MD2Rep::render( Vert *v,int frame ){
-
-	const Frame &frame_a=frames[frame];
-	const Vertex *v_a=frame_a.verts.begin();
-	const Vector scale_a=frame_a.scale,trans_a=frame_a.trans;
-
-	for( int k=0;k<n_verts;++v,++v_a,++k ){
-		v->coords=Vector( v_a->x*scale_a.x+trans_a.x,v_a->y*scale_a.y+trans_a.y,v_a->z*scale_a.z+trans_a.z );
-		v->normal=normals[ v_a->n ];
-	}
-}
-*/
 
 void MD2Rep::render( Vert *v,int frame,float time ){
 
@@ -220,15 +207,6 @@ void MD2Rep::render( Vert *v,int render_a,int render_b,float render_t ){
 	}
 }
 
-/*
-void MD2Rep::render( Vert *v,const Vert *v_a,const Vert *v_b,float render_t ){
-	for( int k=0;k<n_verts;++v,++v_a,++v_b,++k ){
-		v->coords=(v_b->coords-v_a->coords)*render_t+v_a->coords;
-		v->normal=(v_b->normal-v_a->normal)*render_t+v_a->normal;
-	}
-}
-*/
-
 void MD2Rep::render( Model *model,int render_a,int render_b,float render_t ){
 	const Frame &frame_a=frames[render_a];
 	const Vector scale_a=frame_a.scale,trans_a=frame_a.trans;
@@ -260,27 +238,6 @@ void MD2Rep::render( Model *model,int render_a,int render_b,float render_t ){
 
 	model->enqueue( mesh,0,n_verts,0,n_tris );
 }
-/*
-void MD2Rep::render( Model *model,const Vert *v_a,const Vert *v_b,float render_t ){
-
-	const VertexUV *uv=uvs.begin();
-
-	mesh->lock();
-	for( int k=0;k<n_verts;++uv,++v_a,++v_b,++k ){
-
-		const Vector t( ( v_b->coords-v_a->coords)*render_t+v_a->coords );
-		const Vector n( ( v_b->normal-v_a->normal)*render_t+v_a->normal );
-
-		tex_coords[0]=uv->u;
-		tex_coords[1]=uv->v;
-
-		mesh->setVertex( k,&t.x,&n.x,tex_coords );
-	}
-	mesh->unlock();
-
-	model->enqueue( mesh,0,n_verts,0,n_tris );
-}
-*/
 
 void MD2Rep::render( Model *model,const Vert *v_a,int render_b,float render_t ){
 

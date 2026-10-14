@@ -5,19 +5,13 @@
 #include <bb/system/system.h>
 #include <bb/input/input.h>
 #include <bb/graphics/graphics.h>
+#include <bb/pixmap/pixmap.h>
 
-#ifdef WIN32
-#include <windows.h>
-#endif
-
-
-#include <fstream>
 #include <vector>
 #include <set>
 
 #include <math.h>
 
-//degrees to radians
 static const float dtor=0.0174532925199432957692369076848861f;
 
 class BBImage{
@@ -45,11 +39,11 @@ static bool filter=true;
 static bool auto_dirty=true;
 static bool auto_midhandle=false;
 static std::set<BBImage*> image_set;
-/*static*/ int curs_x=0,curs_y=0;
+  int curs_x=0,curs_y=0;
 static BBCanvas *p_canvas=0;
-/*static*/ BBFont *curr_font=0;
-/*static*/ unsigned curr_color=0;
-/*static*/ unsigned curr_clsColor=0;
+  BBFont *curr_font=0;
+  unsigned curr_color=0;
+  unsigned curr_clsColor=0;
 
 static inline void debugImage( BBImage *i,int frame=0 ){
 	if( bb_env.debug ){
@@ -85,7 +79,7 @@ struct GfxMode{
 	int w,h,d,caps;
 };
 
-static int gx_driver=0;	//current graphics driver
+static int gx_driver=0;
 
 static std::vector<GfxMode> gfx_modes;
 
@@ -154,7 +148,6 @@ bool BBContextDriver::graphicsOpened(){
 }
 
 int BBContextDriver::change( const std::string &name ){
-	// TODO: not supporting switching right now
 	if( bbContextDriver ) return 0;
 
 	bbContextDriver=0;
@@ -267,7 +260,8 @@ bb_int_t BBCALL bbGfxMode3D( bb_int_t n ){
 }
 
 bb_int_t BBCALL bbWindowed3D(){
-	int tc;
+	int tc=0;
+	if( !bbContextDriver ) return 0;
 	bbContextDriver->windowedModeInfo( &tc );
 	return (tc & BBContextDriver::GFXMODECAPS_3D) ? 1 : 0;
 }
@@ -285,6 +279,9 @@ void BBCALL bbSetBuffer( BBCanvas *buff ){
 	debugCanvas( buff );
 	if( gx_canvas ) gx_canvas->unset();
 	gx_canvas=buff;
+	gx_canvas->setColor( curr_color );
+	gx_canvas->setClsColor( curr_clsColor );
+	if( curr_font ) gx_canvas->setFont( curr_font );
 	blitz2d_reset();
 }
 
@@ -333,6 +330,7 @@ void BBCALL bbGraphics3D( bb_int_t w,bb_int_t h,bb_int_t d,bb_int_t mode ){
 	case 1:break;
 	case 2:flags|=BBGraphics::GRAPHICS_WINDOWED;break;
 	case 3:flags|=BBGraphics::GRAPHICS_WINDOWED|BBGraphics::GRAPHICS_SCALED;break;
+	case 4:flags|=BBGraphics::GRAPHICS_WINDOWED;break; // "borderless windowed" - no distinct OS chrome in a browser canvas, so treat like windowed
 	case 6:flags|=BBGraphics::GRAPHICS_WINDOWED|BBGraphics::GRAPHICS_AUTOSUSPEND;break;
 	case 7:flags|=BBGraphics::GRAPHICS_WINDOWED|BBGraphics::GRAPHICS_SCALED|BBGraphics::GRAPHICS_AUTOSUSPEND;break;
 	default:RTEX( "Illegal Graphics3D mode" );
@@ -348,7 +346,7 @@ bool BBCALL bbDefaultGraphics(){
 }
 
 void BBCALL bbEndGraphics(){
-	bbContextDriver->closeGraphics( gx_graphics );
+	freeGraphics();
 	if( !bbDefaultGraphics() ){
 		RTEX( "Unable to set graphics mode" );
 	}
@@ -431,11 +429,24 @@ void BBCALL bbWritePixelFast( bb_int_t x,bb_int_t y,bb_int_t argb,BBCanvas *buff
 }
 
 void BBCALL bbCopyPixel( bb_int_t src_x,bb_int_t src_y,BBCanvas *src,bb_int_t dest_x,bb_int_t dest_y,BBCanvas *buff ){
-	(buff ? buff : gx_canvas)->copyPixel( dest_x,dest_y,src ? src : gx_canvas,src_x,src_y );
+	BBCanvas *s=src ? src : gx_canvas;
+	BBCanvas *d=buff ? buff : gx_canvas;
+	int ox,oy,vx,vy,vw,vh;
+	s->getOrigin( &ox,&oy );s->getViewport( &vx,&vy,&vw,&vh );
+	src_x+=ox;src_y+=oy;
+	if( src_x<vx || src_x>=vx+vw || src_y<vy || src_y>=vy+vh ) return;
+	d->getOrigin( &ox,&oy );d->getViewport( &vx,&vy,&vw,&vh );
+	dest_x+=ox;dest_y+=oy;
+	if( dest_x<vx || dest_x>=vx+vw || dest_y<vy || dest_y>=vy+vh ) return;
+	s->lock();d->lock();
+	d->setPixelFast( dest_x,dest_y,s->getPixelFast( src_x,src_y ) );
+	d->unlock();s->unlock();
 }
 
 void BBCALL bbCopyPixelFast( bb_int_t src_x,bb_int_t src_y,BBCanvas *src,bb_int_t dest_x,bb_int_t dest_y,BBCanvas *buff ){
-	(buff ? buff : gx_canvas)->copyPixelFast( dest_x,dest_y,src ? src : gx_canvas,src_x,src_y );
+	BBCanvas *s=src ? src : gx_canvas;
+	BBCanvas *d=buff ? buff : gx_canvas;
+	d->setPixelFast( dest_x,dest_y,s->getPixelFast( src_x,src_y ) );
 }
 
 bb_int_t BBCALL bbScanLine(){
@@ -475,6 +486,7 @@ void BBCALL bbCopyRect( bb_int_t sx,bb_int_t sy,bb_int_t w,bb_int_t h,bb_int_t d
 #define RED(_X_) ( ((_X_)>>16) & 0xff )
 #define GRN(_X_) ( ((_X_)>>8) & 0xff )
 #define BLU(_X_) ( (_X_) & 0xff )
+#define ALP(_X_) ( (((unsigned)(_X_))>>24) & 0xff )
 
 static int getPixel( BBCanvas *c,float x,float y ){
 	debugCanvas( c );
@@ -493,8 +505,9 @@ static int getPixel( BBCanvas *c,float x,float y ){
 	float r=RED(tl)*w1+RED(tr)*w2+RED(bl)*w3+RED(br)*w4;
 	float g=GRN(tl)*w1+GRN(tr)*w2+GRN(bl)*w3+GRN(br)*w4;
 	float b=BLU(tl)*w1+BLU(tr)*w2+BLU(bl)*w3+BLU(br)*w4;
+	float a=ALP(tl)*w1+ALP(tr)*w2+ALP(bl)*w3+ALP(br)*w4;
 
-	return (int(r+.5f)<<16)|(int(g+.5f)<<8)|int(b+.5f);
+	return (int(a+.5f)<<24)|(int(r+.5f)<<16)|(int(g+.5f)<<8)|int(b+.5f);
 }
 
 struct vec2{ float x,y; };
@@ -521,10 +534,10 @@ static BBCanvas *tformCanvas( BBCanvas *c,float m[2][2],int x_handle,int y_handl
 	i[0][1]=-dt*m[0][1];i[1][1]=dt*m[0][0];
 
 	float ox=x_handle,oy=y_handle;
-	v0.x=-ox;v0.y=-oy;	//tl
-	v1.x=c->getWidth()-ox;v1.y=-oy;	//tr
-	v2.x=c->getWidth()-ox;v2.y=c->getHeight()-oy;	//br
-	v3.x=-ox;v3.y=c->getHeight()-oy;	//bl
+	v0.x=-ox;v0.y=-oy;
+	v1.x=c->getWidth()-ox;v1.y=-oy;
+	v2.x=c->getWidth()-ox;v2.y=c->getHeight()-oy;
+	v3.x=-ox;v3.y=c->getHeight()-oy;
 	v0=vrot(m,v0);v1=vrot(m,v1);v2=vrot(m,v2);v3=vrot(m,v3);
 	float minx=floor( vmin( v0.x,v1.x,v2.x,v3.x ) );
 	float miny=floor( vmin( v0.y,v1.y,v2.y,v3.y ) );
@@ -535,6 +548,56 @@ static BBCanvas *tformCanvas( BBCanvas *c,float m[2][2],int x_handle,int y_handl
 	BBCanvas *t=gx_graphics->createCanvas( iw,ih,0 );
 	t->setHandle( -minx,-miny );
 	t->setMask( c->getMask() );
+
+	if( m[1][0]==0.0f && m[0][1]==0.0f && m[0][0]>0.0f && m[1][1]>0.0f ){
+		if( c->stretchTo( t,filter ) ) return t;
+	}
+
+	BBPixmap *pm=c->getPixmap();
+	if( pm && pm->bits && pm->bpp==4 && pm->width==c->getWidth() && pm->height==c->getHeight() ){
+		int sw=pm->width,sh=pm->height;
+		const unsigned char *bits=pm->bits;
+		unsigned cmask=c->getMask()&0xffffff;
+		t->lock();
+		v.y=miny+.5f;
+		for( int y=0;y<ih;++v.y,++y ){
+			v.x=minx+.5f;
+			for( int x=0;x<iw;++v.x,++x ){
+				vec2 q=vrot(i,v);
+				unsigned argb;
+				if( filter ){
+					float fx=q.x+ox-.5f,fy=q.y+oy-.5f;
+					float flx=floor(fx),fly=floor(fy);
+					int sx=(int)flx,sy=(int)fly;
+					float u=fx-flx,w=fy-fly;
+					float wt[4]={ (1-u)*(1-w),u*(1-w),(1-u)*w,u*w };
+					int px[4]={ sx,sx+1,sx,sx+1 };
+					int py[4]={ sy,sy,sy+1,sy+1 };
+					float r=0,g=0,b=0,a=0;
+					for( int k=0;k<4;++k ){
+						if( px[k]>=0 && py[k]>=0 && px[k]<sw && py[k]<sh ){
+							const unsigned char *p=bits+((size_t)py[k]*sw+px[k])*4;
+							r+=p[0]*wt[k];g+=p[1]*wt[k];b+=p[2]*wt[k];a+=p[3]*wt[k];
+						}else{
+							r+=((cmask>>16)&0xff)*wt[k];g+=((cmask>>8)&0xff)*wt[k];b+=(cmask&0xff)*wt[k];
+						}
+					}
+					argb=((unsigned)(a+.5f)<<24)|((unsigned)(r+.5f)<<16)|((unsigned)(g+.5f)<<8)|(unsigned)(b+.5f);
+				}else{
+					int sx=(int)floor(q.x+ox),sy=(int)floor(q.y+oy);
+					if( sx>=0 && sy>=0 && sx<sw && sy<sh ){
+						const unsigned char *p=bits+((size_t)sy*sw+sx)*4;
+						argb=((unsigned)p[3]<<24)|((unsigned)p[0]<<16)|((unsigned)p[1]<<8)|(unsigned)p[2];
+					}else{
+						argb=cmask;
+					}
+				}
+				t->setPixelFast( x,y,argb );
+			}
+		}
+		t->unlock();
+		return t;
+	}
 
 	c->lock();
 	t->lock();
@@ -556,48 +619,7 @@ static BBCanvas *tformCanvas( BBCanvas *c,float m[2][2],int x_handle,int y_handl
 }
 
 static bool saveCanvas( BBCanvas *c,const std::string &f ){
-#ifndef WIN32 // FIXME: port to posix
 	return false;
-#else
-	std::ofstream out( f.c_str(),std::ios::binary );
-	if( !out.good() ) return false;
-
-	int tempsize=(c->getWidth()*3+3)&~3;
-
-	BITMAPFILEHEADER bf;
-	memset( &bf,0,sizeof(bf) );
-	bf.bfType='MB';
-	bf.bfSize=sizeof(BITMAPFILEHEADER)+sizeof(BITMAPINFOHEADER)+tempsize*c->getHeight();
-	bf.bfOffBits=sizeof(BITMAPFILEHEADER)+sizeof(BITMAPINFOHEADER);
-	BITMAPINFOHEADER bi;memset( &bi,0,sizeof(bi) );
-	bi.biSize=sizeof(bi);
-	bi.biWidth=c->getWidth();
-	bi.biHeight=c->getHeight();
-	bi.biPlanes=1;
-	bi.biBitCount=24;
-	out.write( (char*)&bf,sizeof(bf) );
-	out.write( (char*)&bi,sizeof(bi) );
-
-	unsigned char *temp=d_new unsigned char[ tempsize ];
-	memset( temp,0,tempsize );
-
-	c->lock();
-	for( int y=c->getHeight()-1;y>=0;--y ){
-		unsigned char *dest=temp;
-		for( int x=0;x<c->getWidth();++x ){
-			unsigned rgb=c->getPixelFast( x,y );
-			*dest++=rgb&0xff;
-			*dest++=(rgb>>8)&0xff;
-			*dest++=(rgb>>16)&0xff;
-		}
-		out.write( (char*)temp,tempsize );
-	}
-	c->unlock();
-
-	delete [] temp;
-
-	return out.good();
-#endif
 }
 
 bb_int_t BBCALL bbLoadBuffer( BBCanvas *c,BBStr *str ){
@@ -706,11 +728,13 @@ void BBCALL bbSetFont( BBFont *f ){
 }
 
 bb_int_t BBCALL bbFontWidth(){
+	if( !curr_font ) return 0;
 	debugFont( curr_font );
 	return curr_font->getWidth();
 }
 
 bb_int_t BBCALL bbFontHeight(){
+	if( !curr_font ) return 0;
 	debugFont( curr_font );
 	return curr_font->getHeight();
 }
@@ -750,7 +774,6 @@ BBImage * BBCALL bbLoadAnimImage( BBStr *s,bb_int_t w,bb_int_t h,bb_int_t first,
 	BBCanvas *pic=gx_graphics->loadCanvas( t,BBCanvas::CANVAS_NONDISPLAY );
 	if( !pic ) return 0;
 
-	//frames per row, per picture
 	int fpr=pic->getWidth()/w;
 	int fpp=pic->getHeight()/h*fpr;
 	if( first+cnt>fpp ){
@@ -758,7 +781,6 @@ BBImage * BBCALL bbLoadAnimImage( BBStr *s,bb_int_t w,bb_int_t h,bb_int_t first,
 		RTEX( "Not enough frames in bitmap" );
 	}
 
-	//x,y of first frame...
 	std::vector<BBCanvas*> frames;
 	int src_x=first%fpr*w,src_y=first/fpr*h;
 
@@ -964,12 +986,65 @@ bb_int_t BBCALL bbImageYHandle( BBImage *i ){
 	return y;
 }
 
+static bool canvasRectCollide( BBCanvas *c,int x1,int y1,int x2,int y2,int w2,int h2,bool solid ){
+	int hx,hy;c->getHandle( &hx,&hy );
+	int w1=c->getWidth(),h1=c->getHeight();
+
+	x1-=hx;if( x1+w1<=x2 || x1>=x2+w2 ) return false;
+	y1-=hy;if( y1+h1<=y2 || y1>=y2+h2 ) return false;
+
+	if( solid ) return true;
+
+	int il=x1>x2 ? x1 : x2,ir=(x1+w1)<(x2+w2) ? (x1+w1) : (x2+w2);
+	int it=y1>y2 ? y1 : y2,ib=(y1+h1)<(y2+h2) ? (y1+h1) : (y2+h2);
+
+	unsigned mask=c->getMask()&0xffffff;
+	bool hit=false;
+	c->lock();
+	for( int y=it;y<ib && !hit;++y ){
+		for( int x=il;x<ir;++x ){
+			if( (c->getPixelFast( x-x1,y-y1 )&0xffffff)!=mask ){ hit=true;break; }
+		}
+	}
+	c->unlock();
+	return hit;
+}
+
+static bool canvasesCollide( BBCanvas *c1,int x1,int y1,BBCanvas *c2,int x2,int y2,bool solid ){
+	int h1x,h1y,h2x,h2y;
+	c1->getHandle( &h1x,&h1y );c2->getHandle( &h2x,&h2y );
+	int w1=c1->getWidth(),h1=c1->getHeight();
+	int w2=c2->getWidth(),h2=c2->getHeight();
+
+	x1-=h1x;x2-=h2x;
+	if( x1+w1<=x2 || x1>=x2+w2 ) return false;
+	y1-=h1y;y2-=h2y;
+	if( y1+h1<=y2 || y1>=y2+h2 ) return false;
+
+	if( solid ) return true;
+
+	int il=x1>x2 ? x1 : x2,ir=(x1+w1)<(x2+w2) ? (x1+w1) : (x2+w2);
+	int it=y1>y2 ? y1 : y2,ib=(y1+h1)<(y2+h2) ? (y1+h1) : (y2+h2);
+
+	unsigned m1=c1->getMask()&0xffffff,m2=c2->getMask()&0xffffff;
+	bool hit=false;
+	c1->lock();c2->lock();
+	for( int y=it;y<ib && !hit;++y ){
+		for( int x=il;x<ir;++x ){
+			if( (c1->getPixelFast( x-x1,y-y1 )&0xffffff)!=m1 &&
+				(c2->getPixelFast( x-x2,y-y2 )&0xffffff)!=m2 ){ hit=true;break; }
+		}
+	}
+	c2->unlock();c1->unlock();
+	return hit;
+}
+
 bb_int_t BBCALL bbImagesOverlap( BBImage *i1,bb_int_t x1,bb_int_t y1,BBImage *i2,bb_int_t x2,bb_int_t y2 ){
 	debugImage( i1 );
 	debugImage( i2 );
 	BBCanvas *c1=i1->getFrames()[0];
 	BBCanvas *c2=i2->getFrames()[0];
-	return c1->collide( x1,y1,c2,x2,y2,true );
+	return canvasesCollide( c1,x1,y1,c2,x2,y2,true );
 }
 
 bb_int_t BBCALL bbImagesCollide( BBImage *i1,bb_int_t x1,bb_int_t y1,bb_int_t f1,BBImage *i2,bb_int_t x2,bb_int_t y2,bb_int_t f2 ){
@@ -977,7 +1052,7 @@ bb_int_t BBCALL bbImagesCollide( BBImage *i1,bb_int_t x1,bb_int_t y1,bb_int_t f1
 	debugImage( i2,f2 );
 	BBCanvas *c1=i1->getFrames()[f1];
 	BBCanvas *c2=i2->getFrames()[f2];
-	return c1->collide( x1,y1,c2,x2,y2,false );
+	return canvasesCollide( c1,x1,y1,c2,x2,y2,false );
 }
 
 bb_int_t BBCALL bbRectsOverlap( bb_int_t x1,bb_int_t y1,bb_int_t w1,bb_int_t h1,bb_int_t x2,bb_int_t y2,bb_int_t w2,bb_int_t h2 ){
@@ -988,13 +1063,13 @@ bb_int_t BBCALL bbRectsOverlap( bb_int_t x1,bb_int_t y1,bb_int_t w1,bb_int_t h1,
 bb_int_t BBCALL bbImageRectOverlap( BBImage *i,bb_int_t x,bb_int_t y,bb_int_t x2,bb_int_t y2,bb_int_t w2,bb_int_t h2 ){
 	debugImage( i );
 	BBCanvas *c=i->getFrames()[0];
-	return c->rect_collide( x,y,x2,y2,w2,h2,true );
+	return canvasRectCollide( c,x,y,x2,y2,w2,h2,true );
 }
 
 bb_int_t BBCALL bbImageRectCollide( BBImage *i,bb_int_t x,bb_int_t y,bb_int_t f,bb_int_t x2,bb_int_t y2,bb_int_t w2,bb_int_t h2 ){
 	debugImage( i,f );
 	BBCanvas *c=i->getFrames()[f];
-	return c->rect_collide( x,y,x2,y2,w2,h2,false );
+	return canvasRectCollide( c,x,y,x2,y2,w2,h2,false );
 }
 
 void BBCALL bbTFormImage( BBImage *i,bb_float_t a,bb_float_t b,bb_float_t c,bb_float_t d ){
@@ -1106,17 +1181,15 @@ BBStr * BBCALL bbInput( BBStr *prompt ){
 	float sx,sy;
 	c->getScale(&sx,&sy);
 
-	//get temp canvas
 	if( !p_canvas || p_canvas->getWidth()<c->getWidth() || p_canvas->getHeight()<curr_font->getHeight()*2 ){
 		if( p_canvas ) gx_graphics->freeCanvas( p_canvas );
 		p_canvas=gx_graphics->createCanvas( c->getWidth()*sx,curr_font->getHeight()*2*sy,0 );
-		p_canvas->setScale( sx,sy );
 		if( !p_canvas ){
 			endPrinting(c);
 			return d_new BBStr();
 		}
+		p_canvas->setScale( sx,sy );
 	}
-	//draw prompt
 	c->text( curs_x,curs_y,t );
 	curs_x+=curr_font->getWidth( t );
 
@@ -1130,12 +1203,9 @@ BBStr * BBCALL bbInput( BBStr *prompt ){
 
 	while( go ){
 
-		//render all text
-		//calc curs x and width
 		int cx=curs_x+curr_font->getWidth( str.substr( 0,curs ) );
 		int cw=curr_font->getWidth( curs<str.size() ? str.substr( curs,1 ) : "X" );
 
-		//wait for a key
 		int key=0,st=bbMilliSecs(),tc=-1;
 
 		while( bbRuntimeIdle() ){
@@ -1143,11 +1213,11 @@ BBStr * BBCALL bbInput( BBStr *prompt ){
 			int n=(t-st)/320;
 			if( n!=tc ){
 				tc=n;
-				if( !(tc&1) ){	//cursor ON
+				if( !(tc&1) ){
 					c->setColor( curr_clsColor^0xffffff );
 					c->rect( cx,curs_y,cw,curr_font->getHeight(),true );
 					c->setColor( curr_clsColor );
-				}else{			//cursor OFF
+				}else{
 					c->blit( cx,curs_y,p_canvas,cx,0,cw,curr_font->getHeight(),true );
 					c->setColor( curr_color );
 				}
@@ -1174,7 +1244,6 @@ BBStr * BBCALL bbInput( BBStr *prompt ){
 			bbDelay( 20 );
 		}
 
-		//check the key
 		switch( key ){
 		case 0:
 			go=false;
@@ -1214,7 +1283,6 @@ BBStr * BBCALL bbInput( BBStr *prompt ){
 			}
 		}
 
-		//render text
 		p_canvas->set();
 		p_canvas->blit( 0,curr_font->getHeight(),p_canvas,0,0,c->getWidth(),curr_font->getHeight(),true );
 		p_canvas->text( curs_x,curr_font->getHeight(),str );

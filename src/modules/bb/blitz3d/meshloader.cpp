@@ -66,7 +66,7 @@ Surface::Vertex &MeshLoader::refVertex( int n ){
 }
 
 void MeshLoader::addTriangle( int v0,int v1,int v2,const Brush &b ){
-	//find surface
+
 	MLSurf *surf;
 	std::map<Brush,MLSurf*>::const_iterator it=ml_mesh->brush_map.find( b );
 	if( it!=ml_mesh->brush_map.end() ) surf=it->second;
@@ -82,7 +82,7 @@ void MeshLoader::addTriangle( int v0,int v1,int v2,const Brush &b ){
 
 void MeshLoader::endMesh( MeshModel *mesh ){
 	if( mesh ){
-		//fix bone weights
+
 		int k,max_bones=0;
 		for( k=0;k<ml_mesh->verts.size();++k ){
 			Surface::Vertex &v=ml_mesh->verts[k];

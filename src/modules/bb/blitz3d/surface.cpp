@@ -85,6 +85,7 @@ BBMesh *Surface::getMesh(){
 
 	if( valid_vs==vertices.size() && valid_ts==triangles.size() ) return mesh;
 
+
 	valid_vs=valid_ts=0;
 
 	if( mesh_vs<vertices.size() || mesh_ts<triangles.size() ){
@@ -126,16 +127,16 @@ BBMesh *Surface::getMesh( const std::vector<Bone> &bones ){
 	for( ;valid_vs<vertices.size();++valid_vs ){
 		const Vertex &v=vertices[valid_vs];
 		if( v.bone_bones[0]==255 ){
-			//no bone!
+
 			const Bone &bone=bones[0];
 			mesh->setVertex( valid_vs,bone.coord_tform * v.coords,bone.normal_tform * v.normal,v.color,v.tex_coords );
 		}else if( v.bone_bones[1]==255 ){
-			//one bone only
+
 			const Bone &bone=bones[v.bone_bones[0]];
 			mesh->setVertex( valid_vs,bone.coord_tform * v.coords,bone.normal_tform * v.normal,v.color,v.tex_coords );
 		}else{
 			const Vertex &v=vertices[valid_vs];
-			//two or more bones
+
 			Vector tv,tn;
 			for( int n=0;n<MAX_SURFACE_BONES;++n ){
 				if( v.bone_bones[n]==255 ) break;
@@ -154,83 +155,3 @@ BBMesh *Surface::getMesh( const std::vector<Bone> &bones ){
 	return mesh;
 }
 
-/*
-gxMesh *Surface::getMesh(){
-	if( mesh && mesh->dirty() ) valid_vs=0;
-
-	if( valid_vs==vertices.size() && valid_ts==triangles.size() ) return mesh;
-
-	valid_vs=0;
-	valid_ts=0;
-
-	if( mesh ){
-		int maxvs=mesh->maxVerts(),maxts=mesh->maxTris();
-		if( maxvs<vertices.size() || maxts<triangles.size() ){
-			bbScene->freeMesh( mesh );
-			mesh=bbScene->createMesh( vertices.size()+maxvs/2,triangles.size()+maxts/2,0 );
-		}
-	}else if( vertices.size() || triangles.size() ){
-		mesh=bbScene->createMesh( vertices.size(),triangles.size(),0 );
-	}
-
-	mesh->lock( true );
-	for( ;valid_vs<vertices.size();++valid_vs ){
-		mesh->setVertex( valid_vs,&vertices[valid_vs] );
-	}
-	for( ;valid_ts<triangles.size();++valid_ts ){
-		const Triangle &t=triangles[valid_ts];
-		mesh->setTriangle( valid_ts,t.verts[0],t.verts[1],t.verts[2] );
-	}
-	mesh->unlock();
-	return mesh;
-}
-
-gxMesh *Surface::getMesh( const vector<Bone> &bones,gxMesh *mesh ){
-
-	valid_vs=0;
-	valid_ts=0;
-
-	if( mesh ){
-		int maxvs=mesh->maxVerts(),maxts=mesh->maxTris();
-		if( maxvs<vertices.size() || maxts<triangles.size() ){
-			bbScene->freeMesh( mesh );
-			mesh=bbScene->createMesh( vertices.size(),triangles.size(),0 );
-
-		}
-	}else if( vertices.size() || triangles.size() ){
-		mesh=bbScene->createMesh( vertices.size(),triangles.size(),0 );
-	}
-
-	mesh->lock( true );
-	for( ;valid_vs<vertices.size();++valid_vs ){
-		const Vertex &v=vertices[valid_vs];
-		if( v.bone_bones[0]==255 ){
-			//no bone!
-			const Bone &bone=bones[0];
-			mesh->setVertex( valid_vs,bone.coord_tform * v.coords,bone.normal_tform * v.normal,v.color,v.tex_coords );
-		}else if( v.bone_bones[1]==255 ){
-			//one bone only
-			const Bone &bone=bones[v.bone_bones[0]];
-			mesh->setVertex( valid_vs,bone.coord_tform * v.coords,bone.normal_tform * v.normal,v.color,v.tex_coords );
-		}else{
-			const Vertex &v=vertices[valid_vs];
-			//two or more bones
-			Vector tv,tn;
-			for( int n=0;n<MAX_SURFACE_BONES;++n ){
-				if( v.bone_bones[n]==255 ) break;
-				const Bone &bone=bones[v.bone_bones[n]];
-				tv+=bone.coord_tform * v.coords * v.bone_weights[n];
-				tn+=bone.normal_tform * v.normal * v.bone_weights[n];
-			}
-			mesh->setVertex( valid_vs,tv,tn.normalized(),v.color,v.tex_coords );
-		}
-	}
-	for( ;valid_ts<triangles.size();++valid_ts ){
-		const Triangle &t=triangles[valid_ts];
-		mesh->setTriangle( valid_ts,t.verts[0],t.verts[1],t.verts[2] );
-	}
-	mesh->unlock();
-	return mesh;
-}
-
-*/

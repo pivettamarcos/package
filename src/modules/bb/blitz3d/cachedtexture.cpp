@@ -77,6 +77,7 @@ struct CachedTexture::Rep{
 			int y=(first/x_tiles)*h;
 			while( cnt-- ){
 				BBCanvas *p=gx_graphics->createCanvas( w,h,flags );
+				if( !p ) break;
 				gx_graphics->copy( p,0,0,p->getWidth(),p->getHeight(),t,x,y,w,h );
 				frames.push_back(p);
 				x=x+w;if( x+w>t->getWidth() ){ x=0;y=y+h; }
@@ -95,7 +96,7 @@ CachedTexture::Rep *CachedTexture::findRep( const std::string &f,int flags,int w
 	std::set<Rep*>::const_iterator it;
 	for( it=rep_set.begin();it!=rep_set.end();++it ){
 		Rep *rep=*it;
-		if( rep->file==f && rep->flags==flags && rep->w==w && rep->h==h && rep->first==first && rep->frames.size()==cnt ){
+		if( rep->file==f && rep->flags==flags && rep->w==w && rep->h==h && rep->first==first && (int)rep->frames.size()==cnt ){
 			++rep->ref_cnt;return rep;
 		}
 	}
@@ -110,11 +111,7 @@ CachedTexture::CachedTexture( const std::string &f_,int flags,int w,int h,int fi
 	std::string f=canonicalpath( f_ );
 	if( f.substr(0,2)=="." OS_FS_SEP ) f=f.substr(2);
 	if( path.size() ){
-#ifdef BB_WINDOWS // TODO: decide if tolower should get pushed into filenamefile/fullfilename
-		std::string t=path+tolower( filenamefile( f ) );
-#else
 		std::string t=path+filenamefile( f );
-#endif
 		if( (rep=findRep( t,flags,w,h,first,cnt )) ) return;
 		rep=d_new Rep( t,flags,w,h,first,cnt );
 		if( rep->frames.size() ){
@@ -124,9 +121,6 @@ CachedTexture::CachedTexture( const std::string &f_,int flags,int w,int h,int fi
 		delete rep;
 	}
 	std::string t=fullfilename( f );
-#ifdef BB_WINDOWS
-	t=tolower( t );
-#endif
 	if( (rep=findRep( t,flags,w,h,first,cnt )) ) return;
 	rep=d_new Rep( t,flags,w,h,first,cnt );
 	rep_set.insert( rep );
@@ -163,11 +157,7 @@ const std::vector<BBCanvas*> &CachedTexture::getFrames()const{
 }
 
 void CachedTexture::setPath( const std::string &t ){
-#ifdef BB_WINDOWS
-	path=tolower(t);
-#else
 	path=t;
-#endif
 	if( int sz=path.size() ){
 		if( path[sz-1]!=OS_FS_SEP[0] ) path+=OS_FS_SEP[0];
 	}

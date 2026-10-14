@@ -78,6 +78,7 @@ static void makeKeywords(){
 	alphaTokes["Shl"]=SHL;
 	alphaTokes["Shr"]=SHR;
 	alphaTokes["Sar"]=SAR;
+	alphaTokes["Lor"]=LOR;
 
 	alphaTokes["BundleIdentifier"]=BUNDLEIDENTIFIER;
 	alphaTokes["BundleAppName"]=BUNDLEAPPNAME;
@@ -208,6 +209,10 @@ void Toker::nextline(){
 		}
 		if( (c=='>'&&n=='=')||(c=='='&&n=='>') ){
 			tokes.push_back( Toke( GE,from,k+=2 ) );
+			continue;
+		}
+		if( c=='|'&&n=='|' ){
+			tokes.push_back( Toke( LOR,from,k+=2 ) );
 			continue;
 		}
 		tokes.push_back( Toke( c,from,++k ) );

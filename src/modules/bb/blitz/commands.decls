@@ -7,8 +7,6 @@ End():"bbEnd"
 AppTitle( title$,close_prompt$="" ):"bbAppTitle"
 CommandLine$():"bbCommandLine"
 
-;symbols
-
 _bbIntType:"&_bbIntType"
 _bbFltType:"&_bbFltType"
 _bbStrType:"&_bbStrType"
@@ -64,7 +62,6 @@ _bbFPow:"_bbFPow"
 _bbPushGosub:"_bbPushGosub"
 _bbPopGosub:"_bbPopGosub"
 
-;debug
 _bbDebugStmt:"_bbDebugStmt"
 _bbDebugEnter:"_bbDebugEnter"
 _bbDebugLeave:"_bbDebugLeave"

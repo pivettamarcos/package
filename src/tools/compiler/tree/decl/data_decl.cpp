@@ -45,12 +45,18 @@ void DataDeclNode::translate2( Codegen_LLVM *g ){
 		v=llvm::ConstantExpr::getBitCast( (llvm::Constant*)c->translate2( g ),g->intTy );
 	}else{
 		ty=4;
-		v=llvm::ConstantExpr::getPtrToInt( g->constantString( c->stringValue() ),g->intTy );
+		v=nullptr;
 	}
 
 	values_idx=g->data_values.size();
 	g->data_values.push_back( g->constantInt( ty ) );
-	g->data_values.push_back( v );
+	if( v ){
+		g->data_values.push_back( v );
+	}else{
+		size_t slot=g->data_values.size();
+		g->data_values.push_back( g->constantInt( 0 ) );
+		g->data_str_fixups.push_back( { slot, g->constantString( c->stringValue() ) } );
+	}
 }
 
 void DataDeclNode::transdata2( Codegen_LLVM *g ){

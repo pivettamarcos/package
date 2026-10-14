@@ -15,22 +15,18 @@ public:
 	MeshModel( const MeshModel &t );
 	~MeshModel();
 
-	//Entity interface
 	virtual MeshModel *getMeshModel(){ return this; }
 	virtual Entity *clone(){ return d_new MeshModel( *this ); }
 
-	//Object interface
 	virtual bool collide( const Line &line,float radius,Collision *curr_coll,const Transform &t );
 
-	//Model interface
 	virtual void setRenderBrush( const Brush &b );
 	virtual bool render( const RenderContext &rc );
 	virtual void renderQueue( int type );
+	virtual bool deferrable()const{ return surf_bones.empty(); }
 
-	//boned mesh!
 	void createBones();
 
-	//MeshModel interface
 	Surface *createSurface( const Brush &b );
 	void setCullBox( const Box &box );
 	void updateNormals();
@@ -38,9 +34,7 @@ public:
 	void transform( const Transform &t );
 	void paint( const Brush &b );
 	void add( const MeshModel &t );
-	void optimize();
 
-	//accessors
 	const SurfaceList &getSurfaces()const;
 	Surface *findSurface( const Brush &b )const;
 	bool intersects( const MeshModel &m )const;

@@ -1,22 +1,23 @@
 #include "../stdutil/stdutil.h"
 #include <bb/graphics/font.h>
-#include "canvas.h"
+#include "graphics.gl.h"
 #include <utf8.h>
 
 #include <cmath>
 #include <map>
 #include <algorithm>
+#include <vector>
 
 #include "default.glsl.h"
 
 static
 GLenum _cube_order[6]={
-	GL_TEXTURE_CUBE_MAP_NEGATIVE_X, // left (negative X) face
-	GL_TEXTURE_CUBE_MAP_POSITIVE_Z, // forward (positive Z) face - this is the default.
-	GL_TEXTURE_CUBE_MAP_POSITIVE_X, // right (positive X) face
-	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, // backward (negative Z) face
-	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, // up (positive Y) face
-	GL_TEXTURE_CUBE_MAP_POSITIVE_Y  // down (negative Y) face
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+	GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+	GL_TEXTURE_CUBE_MAP_POSITIVE_Y
 };
 
 struct UniformState{
@@ -36,7 +37,6 @@ struct Vertex{
 static
 bool makeProgram( ContextResources *res,float sx,float sy,float tx,float ty,bool tex_enabled,float resx,float resy,float x,float y,float width,float height,float color[3] ){
 	if( !glIsProgram( res->default_program ) ){
-		// LOGD( "rebuilding 2d shader...\n" );
 
 		std::string src( DEFAULT_GLSL,DEFAULT_GLSL+DEFAULT_GLSL_SIZE );
 		res->default_program=GL( _bbGLCompileProgram( "default.glsl",src ) );
@@ -55,6 +55,14 @@ bool makeProgram( ContextResources *res,float sx,float sy,float tx,float ty,bool
 
 	GL( glUseProgram( res->default_program ) );
 
+	GL( glDisable( GL_CULL_FACE ) );
+	GL( glDisable( GL_DEPTH_TEST ) );
+
+	GL( glViewport( 0,0,(int)resx,(int)resy ) );
+	GL( glDisable( GL_SCISSOR_TEST ) );
+
+	GL( glActiveTexture( GL_TEXTURE0 ) );
+
 	UniformState us={ 0 };
 	us.texscale[0]=tx;us.texscale[1]=ty;
 	us.texenabled=tex_enabled;
@@ -63,15 +71,10 @@ bool makeProgram( ContextResources *res,float sx,float sy,float tx,float ty,bool
 	us.color[0]=color[0];us.color[1]=color[1];us.color[2]=color[2];
 	us.scale[0]=sx;us.scale[1]=sy;
 
-	if( res->ubo ){
-		GL( glBindBuffer( GL_UNIFORM_BUFFER,res->ubo ) );
-	}else{
-		GL( glGenBuffers( 1,&res->ubo ) );
-		GL( glBindBuffer( GL_UNIFORM_BUFFER,res->ubo ) );
-		GL( glBindBufferRange( GL_UNIFORM_BUFFER,0,res->ubo,0,sizeof(us) ) );
-	}
-
+	if( !res->ubo ) GL( glGenBuffers( 1,&res->ubo ) );
+	GL( glBindBuffer( GL_UNIFORM_BUFFER,res->ubo ) );
 	GL( glBufferData( GL_UNIFORM_BUFFER,sizeof(us),&us,GL_DYNAMIC_DRAW ) );
+	GL( glBindBufferRange( GL_UNIFORM_BUFFER,0,res->ubo,0,sizeof(us) ) );
 	GL( glBindBuffer( GL_UNIFORM_BUFFER,0 ) );
 
 	return true;
@@ -96,7 +99,7 @@ void initArrays( int size,GLuint* buffer,GLuint *array ){
 	}
 }
 
-GLCanvas::GLCanvas( ContextResources *res,int w,int h,int f ):res(res),pixmap(0),mask(0),width(w),height(h),pixels(0),handle_x(0),handle_y(0),texture(0),framebuffer(0),mode(0),depthbuffer(0),cube_mode(0){
+GLCanvas::GLCanvas( ContextResources *res,int w,int h,int f ):res(res),pixmap(0),mask(0),width(w),height(h),pixels(0),lock_count(0),handle_x(0),handle_y(0),texture(0),framebuffer(0),mode(0),depthbuffer(0),cube_mode(0),dirty(true){
 	flags=f;
 
 	setOrigin( 0,0 );
@@ -177,6 +180,14 @@ void GLCanvas::cls(){
 	GL( glClear( GL_COLOR_BUFFER_BIT ) );
 }
 
+void GLCanvas::applyTexParams( int want ){
+	applied_params=want;
+	GL( glTexParameteri( target,GL_TEXTURE_MAG_FILTER,(want&1)?GL_NEAREST:GL_LINEAR ) );
+	GL( glTexParameteri( target,GL_TEXTURE_MIN_FILTER,(want&2)?GL_LINEAR_MIPMAP_LINEAR:((want&1)?GL_NEAREST:GL_LINEAR) ) );
+	GL( glTexParameteri( target,GL_TEXTURE_WRAP_S,(want&4)?GL_CLAMP_TO_EDGE:GL_REPEAT ) );
+	GL( glTexParameteri( target,GL_TEXTURE_WRAP_T,(want&8)?GL_CLAMP_TO_EDGE:GL_REPEAT ) );
+}
+
 void GLCanvas::plot( int x,int y ){
 	if( res->plot_buffer==0 ){
 		const Vertex vertices[1] = {
@@ -192,6 +203,8 @@ void GLCanvas::plot( int x,int y ){
 	GL( glEnable(GL_PROGRAM_POINT_SIZE) );
 #endif
 
+	GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
+
 	makeProgram( res,scale_x,scale_y,1.0,1.0,false,width,height,x,y,1.0,1.0,color );
 
 	GL( glBindVertexArray( res->plot_array ) );
@@ -205,6 +218,7 @@ void GLCanvas::plot( int x,int y ){
 }
 
 void GLCanvas::line( int x,int y,int x2,int y2 ){
+	GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
 	const Vertex vertices[2] = {
 		{ (float)x,(float)y,0.0,0.0 },
 		{ (float)x2,(float)y2,0.0,0.0 }
@@ -228,13 +242,14 @@ void GLCanvas::rect( int x,int y,int w,int h,bool solid ){
 }
 
 void GLCanvas::flush(){
-	// here to support FrontBuffer...
 	if( mode==GL_FRONT ){
 		GL( glFlush() );
 	}
 }
 
 void GLCanvas::quad( int x,int y,int w,int h,bool solid,bool texenabled,float tx,float ty,float color[3] ){
+	GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
+
 	static const Vertex vertices[2][4] = {
 		{
 			{ 0.0, 0.0, 0.0, 0.0 },
@@ -274,6 +289,7 @@ void GLCanvas::quad( int x,int y,int w,int h,bool solid,bool texenabled,float tx
 void GLCanvas::oval( int x,int y,int w,int h,bool solid ){
 	int rx=w/2.0f,ry=h/2.0f;
 	int segs=abs(rx)+abs(ry);
+	if( segs<3 ) return;
 
 	float theta = 2*3.1415926/float(segs);
 	float c=cosf(theta),s=sinf(theta),t;
@@ -296,6 +312,8 @@ void GLCanvas::oval( int x,int y,int w,int h,bool solid ){
 		initArrays( 1,&res->oval_buffer,&res->oval_array );
 	}
 
+	GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
+
 	makeProgram( res,scale_x,scale_y,1.0,1.0,false,width,height,0.0,0.0,1.0,1.0,color );
 
 	GL( glBindBuffer( GL_ARRAY_BUFFER,res->oval_buffer ) );
@@ -309,6 +327,7 @@ void GLCanvas::oval( int x,int y,int w,int h,bool solid ){
 
 void GLCanvas::text( int x,int y,const std::string &t ){
 	if( !font || t.size()==0 ) return;
+	GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
 
 	unsigned int texture;
 	if( res->font_textures.count(font)==0 ){
@@ -352,6 +371,7 @@ void GLCanvas::text( int x,int y,const std::string &t ){
 	while( *c ){
 		prev=curr;
 		c=utf8codepoint( c,&curr );
+		if( curr<32 ){ curr=prev; continue; }
 		BBImageFont::Char c=font->getChar( curr );
 
 		float cx=x+c.bearing_x*font->density,cy=y-c.bearing_y*font->density;
@@ -397,7 +417,33 @@ void GLCanvas::text( int x,int y,const std::string &t ){
 	flush();
 }
 
+bool GLCanvas::stretchTo( BBCanvas *d,bool filter ){
+	GLCanvas *dest=(GLCanvas*)d;
+	if( width<=0 || height<=0 || dest->width<=0 || dest->height<=0 ) return false;
+
+	uint32_t cfb;
+	GL( glGetIntegerv( GL_FRAMEBUFFER_BINDING,(GLint*)&cfb ) );
+
+	unsigned int rfb=framebufferId(),dfb=dest->framebufferId();
+	GL( glBindFramebuffer( GL_READ_FRAMEBUFFER,rfb ) );
+	GL( glBindFramebuffer( GL_DRAW_FRAMEBUFFER,dfb ) );
+	GL( glBlitFramebuffer( 0,0,width,height, 0,0,dest->width,dest->height,
+		GL_COLOR_BUFFER_BIT, filter?GL_LINEAR:GL_NEAREST ) );
+
+	if( dest->texture && (dest->getFlags()&CANVAS_TEX_MIPMAP) ){
+		GL( glBindTexture( dest->target,dest->texture ) );
+		GL( glGenerateMipmap( dest->target ) );
+		GL( glBindTexture( dest->target,0 ) );
+	}
+	GL( glBindFramebuffer( GL_FRAMEBUFFER,cfb ) );
+
+	dest->dirty=false;
+	return true;
+}
+
 void GLCanvas::blit( int x,int y,BBCanvas *s,int src_x,int src_y,int src_w,int src_h,bool solid ){
+	if( !s || width<=0 || height<=0 || s->getWidth()<=0 || s->getHeight()<=0 || src_w<=0 || src_h<=0 ) return;
+
 	uint32_t cfb;
 	GL( glGetIntegerv( GL_FRAMEBUFFER_BINDING,(GLint*)&cfb ) );
 
@@ -405,8 +451,6 @@ void GLCanvas::blit( int x,int y,BBCanvas *s,int src_x,int src_y,int src_w,int s
 	s->getScale( &sx,&sy );
 	getScale( &dx,&dy );
 
-	// LOGD( "src: scale(%f, %f), %i,%i",sx,sy,s->getWidth(),s->getHeight() );
-	// LOGD( "dst: scale(%f, %f), %i,%i",dx,dy,getWidth(),getHeight() );
 
 	GLCanvas *src=(GLCanvas*)s;
 	unsigned int rfb=src->framebufferId(),dfb=framebufferId();
@@ -423,8 +467,12 @@ void GLCanvas::blit( int x,int y,BBCanvas *s,int src_x,int src_y,int src_w,int s
 	GL( glBindFramebuffer( GL_READ_FRAMEBUFFER,rfb ) );
 	GL( glBindFramebuffer( GL_DRAW_FRAMEBUFFER,dfb ) );
 
-	GL( glBlitFramebuffer( srcX0,srcY0,srcX1,srcY1,dstX0,dstY0,dstX1,dstY1,GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT,GL_NEAREST ) );
-	GL( glGenerateMipmap( target ) );
+	GL( glBlitFramebuffer( srcX0,srcY0,srcX1,srcY1,dstX0,dstY0,dstX1,dstY1,GL_COLOR_BUFFER_BIT,GL_NEAREST ) );
+	if( texture && (flags&CANVAS_TEX_MIPMAP) ){
+		GL( glBindTexture( target,texture ) );
+		GL( glGenerateMipmap( target ) );
+		GL( glBindTexture( target,0 ) );
+	}
 
 	if( !(flags&CANVAS_TEX_VIDMEM) ){
 		downloadData();
@@ -433,7 +481,7 @@ void GLCanvas::blit( int x,int y,BBCanvas *s,int src_x,int src_y,int src_w,int s
 	GL( glBindFramebuffer( GL_FRAMEBUFFER,cfb ) );
 	flush();
 
-	dirty=true;
+	dirty=false;
 }
 
 void GLCanvas::image( BBCanvas *c,int x,int y,bool solid ){
@@ -445,10 +493,7 @@ void GLCanvas::image( BBCanvas *c,int x,int y,bool solid ){
 	GL( glEnable( GL_BLEND ) );
 	GL( glBlendFunc( GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA ) );
 
-	GL( glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR ) );
-	GL( glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR ) );
-	GL( glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE ) );
-	GL( glTexParameteri( GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE ) );
+	if( src->applied_params!=12 ) src->applyTexParams( 12 );
 
 	float white[3]={ 1.0,1.0,1.0 };
 	quad( x-src->handle_x,y-src->handle_y,src->getWidth(),src->getHeight(),true,true,1.0,1.0,white );
@@ -467,16 +512,13 @@ bool GLCanvas::rect_collide( int x,int y,int rect_x,int rect_y,int rect_w,int re
 }
 
 bool GLCanvas::lock(){
-	if( pixels ) return false;
-
+	if( lock_count++ ) return true;
 	pixels=new unsigned char[width*height*4];
 	downloadData();
-	// RTEX( "GLCanvas::lock not implemented" );
 	return true;
 }
 
 void GLCanvas::setPixel( int x,int y,unsigned argb ){
-	// RTEX( "GLCanvas::setPixel not implemented" );
 	lock();
 	setPixelFast( x,y,argb );
 	unlock();
@@ -485,7 +527,12 @@ void GLCanvas::setPixel( int x,int y,unsigned argb ){
 #define UC(c) static_cast<unsigned char>(c)
 
 void GLCanvas::setPixelFast( int x,int y,unsigned argb ){
-	// RTEX( "GLCanvas::setPixelFast not implemented" );
+	if( !pixels || x<0 || y<0 || x>=width || y>=height ) return;
+	unsigned char *p=pixels+(y*width+x)*4;
+	p[0]=UC((argb>>16)&0xff);
+	p[1]=UC((argb>>8)&0xff);
+	p[2]=UC(argb&0xff);
+	p[3]=UC((argb>>24)&0xff);
 }
 
 void GLCanvas::copyPixel( int x,int y,BBCanvas *src,int src_x,int src_y ){
@@ -497,19 +544,22 @@ void GLCanvas::copyPixelFast( int x,int y,BBCanvas *src,int src_x,int src_y ){
 }
 
 unsigned GLCanvas::getPixel( int x,int y ){
-	// RTEX( "GLCanvas::getPixel not implemented" );
-	return 0;
+	lock();
+	unsigned rgb=getPixelFast( x,y );
+	unlock();
+	return rgb;
 }
 
 unsigned GLCanvas::getPixelFast( int x,int y ){
-	// RTEX( "GLCanvas::getPixelFast not implemented" );
-	return 0;
+	if( !pixels || x<0 || y<0 || x>=width || y>=height ) return 0;
+	unsigned char *p=pixels+(y*width+x)*4;
+	return (UC(p[3])<<24)|(UC(p[0])<<16)|(UC(p[1])<<8)|UC(p[2]);
 }
 
 void GLCanvas::unlock(){
 	if( !pixels ) return;
-
-	// RTEX( "GLCanvas::unlock not implemented" );
+	if( --lock_count>0 ) return;
+	if( lock_count<0 ) lock_count=0;
 	uploadData();
 	delete[] pixels;pixels=0;
 }
@@ -560,8 +610,10 @@ unsigned GLCanvas::getMask()const{
 }
 
 unsigned GLCanvas::getColor()const{
-	RTEX( "GLCanvas::getColor not implemented" );
-	return 0;
+	unsigned r=(unsigned)(color[0]*255.0f+0.5f);
+	unsigned g=(unsigned)(color[1]*255.0f+0.5f);
+	unsigned b=(unsigned)(color[2]*255.0f+0.5f);
+	return (r<<16)|(g<<8)|b;
 }
 
 unsigned GLCanvas::getClsColor()const{
@@ -582,27 +634,7 @@ void GLCanvas::set(){
 void GLCanvas::unset(){
 	flush();
 
-	// if( !pixmap ){
-	// 	BBPixmap *pm=d_new BBPixmap();
-	// 	pm->trans=true;
-	// 	pm->format=PF_RGBA;
-	// 	pm->width=width;
-	// 	pm->height=height;
-	// 	pm->pitch=4;
-	// 	pm->bpp=4;
-	// 	int size=pm->width*pm->bpp*pm->height;
-	// 	pm->bits=new unsigned char[size];
-	// 	pixmap=pm;
-	// }
-
-	// GLint cfb;
-	// GL( glGetIntegerv( GL_FRAMEBUFFER_BINDING,&cfb ) );
-	// GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
-	// GL( glReadPixels( 0,0,pixmap->width,pixmap->height,GL_BGRA,GL_UNSIGNED_BYTE,pixmap->bits  ) );
-	// GL( glBindFramebuffer( GL_FRAMEBUFFER,cfb ) );
-	// dirty=true;
-
-	if( texture ){
+	if( texture && (flags&CANVAS_TEX_MIPMAP) ){
 		GL( glBindTexture( target,texture ) );
 		GL( glGenerateMipmap( target ) );
 		GL( glBindTexture( target,0 ) );
@@ -617,7 +649,6 @@ void GLCanvas::uploadData(){
 	BBPixmap *pm=0;
 	void *data=0;
 
-	// TODO: not super happy with this...
 	if( pixels ){
 		data=pixels;
 	} else if( pixmap ){
@@ -633,21 +664,6 @@ void GLCanvas::uploadData(){
 		}
 
 		data=pm->bits;
-	}else{
-		// if( target!=GL_TEXTURE_2D ){
-		// 	pm=d_new BBPixmap();
-		// 	pm->trans=true;
-		// 	pm->format=PF_RGBA;
-		// 	pm->width=width;
-		// 	pm->height=height;
-		// 	pm->pitch=4;
-		// 	pm->bpp=4;
-		// 	int size=pm->width*pm->bpp*pm->height;
-		// 	pm->bits=new unsigned char[size];
-		// 	pm->fill(255,0,0,1.0);
-
-		// 	data=pm->bits;
-		// }
 	}
 
 	if( !texture ) GL( glGenTextures( 1,&texture ) );
@@ -657,7 +673,9 @@ void GLCanvas::uploadData(){
 	for( int i=0;i<(target==GL_TEXTURE_2D?1:6);i++ ){
 		GL( glTexImage2D( target==GL_TEXTURE_2D?target:_cube_order[i],0,GL_RGBA,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,data ) );
 	}
-	GL( glGenerateMipmap( target ) );
+	if( flags&CANVAS_TEX_MIPMAP ){
+		GL( glGenerateMipmap( target ) );
+	}
 
 	delete pm;
 
@@ -665,21 +683,15 @@ void GLCanvas::uploadData(){
 }
 
 void GLCanvas::downloadData(){
-	// BBPixmap *pm=d_new BBPixmap();
-	// pm->trans=true;
-	// pm->format=PF_RGBA;
-	// pm->width=width;
-	// pm->height=height;
-	// pm->pitch=4;
-	// pm->bpp=4;
-	// int size=pm->width*pm->bpp*pm->height;
-	// pm->bits=new unsigned char[size];
-	// pixmap=pm;
+	if( pixels && pixmap && pixmap->bits && pixmap->bpp==4 && pixmap->width==width && pixmap->height==height ){
+		memcpy( pixels,pixmap->bits,(size_t)width*height*4 );
+		return;
+	}
 
-	void *bits=pixmap?pixmap->bits:pixels;
+	void *bits=pixels?pixels:(pixmap?pixmap->bits:0);
 	if( bits ){
 		GL( glBindFramebuffer( GL_FRAMEBUFFER,framebufferId() ) );
-		GL( glReadPixels( 0,0,width,height,GL_BGRA,GL_UNSIGNED_BYTE,bits  ) );
+		GL( glReadPixels( 0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,bits  ) );
 	}
 }
 

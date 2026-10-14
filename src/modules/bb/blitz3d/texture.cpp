@@ -14,7 +14,6 @@ struct Filter{
 static std::vector<Filter> filters;
 
 static int filterFile( const std::string &t,int flags ){
-	//check filters...
 	std::string l=tolower(t);
 	for( unsigned int k=0;k<filters.size();++k ){
 		if( l.find( filters[k].t )!=std::string::npos ){

@@ -3,7 +3,6 @@
 
 #include <cstdio>
 #include <fstream>
-#include <mutex>
 
 class AudioStream{
 protected:
@@ -12,11 +11,6 @@ protected:
 	unsigned char *buf;
 	int buf_size;
 	unsigned int channels,bits,samples,frequency;
-#ifndef BB_MINGW
-	std::mutex lock;
-#else
-	HANDLE lock;
-#endif
 	std::string path;
 
 public:
@@ -34,6 +28,8 @@ public:
 		unsigned int getFrequency();
 		unsigned int getSamples();
 
+		double seconds();
+
 		bool eof();
 	};
 
@@ -49,6 +45,8 @@ public:
 	virtual void seek( long pos )=0;
 	virtual long pos()=0;
 	virtual size_t decode()=0;
+
+	virtual double toSeconds( long pos );
 
 	bool init( const char *url );
 	virtual size_t read( void *ptr, size_t size );

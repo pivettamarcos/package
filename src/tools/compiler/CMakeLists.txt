@@ -62,6 +62,7 @@ set(TREE_SOURCES
   tree/expr/arith_expr.cpp tree/expr/arith_expr.h
   tree/expr/before.cpp tree/expr/before.h
   tree/expr/bin_expr.cpp tree/expr/bin_expr.h
+  tree/expr/logic_expr.cpp tree/expr/logic_expr.h
   tree/expr/call.cpp tree/expr/call.h
   tree/expr/cast.cpp tree/expr/cast.h
   tree/expr/expr_seq.cpp tree/expr/expr_seq.h

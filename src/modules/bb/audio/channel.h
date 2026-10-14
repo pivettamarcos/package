@@ -3,11 +3,8 @@
 #define BBCHANNEL_H
 
 class BBChannel{
-
-	/***** GX INTERFACE *****/
 public:
 	virtual ~BBChannel();
-	//modifiers
 	virtual void stop()=0;
 	virtual void setPaused( bool paused )=0;
 	virtual void setPitch( int pitch )=0;

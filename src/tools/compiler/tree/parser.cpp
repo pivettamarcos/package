@@ -13,6 +13,7 @@
 #include "expr/arith_expr.h"
 #include "expr/before.h"
 #include "expr/bin_expr.h"
+#include "expr/logic_expr.h"
 #include "expr/call.h"
 #include "expr/cast.h"
 #include "expr/first.h"
@@ -634,6 +635,11 @@ ExprNode *Parser::parseExpr1( bool opt ){
 	if( !lhs ) return 0;
 	for(;;){
 		int c=toker->curr();
+		if( c==LOR ){
+			toker->next();ExprNode *rhs=parseExpr2( false );
+			lhs=d_new LogicExprNode( lhs.release(),rhs );
+			continue;
+		}
 		if( c!=AND && c!=OR && c!=XOR ) return lhs.release();
 		toker->next();ExprNode *rhs=parseExpr2( false );
 		lhs=d_new BinExprNode( c,lhs.release(),rhs );

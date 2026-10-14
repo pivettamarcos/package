@@ -6,7 +6,6 @@
 #include <streambuf>
 
 class BBDir{
-  /***** GX INTERFACE *****/
 public:
   virtual ~BBDir();
 
@@ -16,7 +15,6 @@ public:
 class BBFileSystem{
 public:
   virtual ~BBFileSystem();
-  /***** GX INTERFACE *****/
 public:
   enum{
     FILE_TYPE_NONE=0,FILE_TYPE_FILE=1,FILE_TYPE_DIR=2
@@ -42,6 +40,8 @@ public:
 };
 
 extern BBFileSystem *gx_filesys;
+
+std::string bbResolveExistingPath( const std::string &want );
 
 struct BBFile;
 

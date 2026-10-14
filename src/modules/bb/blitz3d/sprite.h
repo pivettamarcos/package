@@ -8,10 +8,10 @@
 class Sprite : public Model{
 public:
 	enum{
-		VIEW_MODE_FREE=1,		//visible from any angle
-		VIEW_MODE_FIXED=2,		//visible only from front
-		VIEW_MODE_UPRIGHT=3,	//upright tree-style
-		VIEW_MODE_UPRIGHT2=4	//better upright tree-style
+		VIEW_MODE_FREE=1,
+		VIEW_MODE_FIXED=2,
+		VIEW_MODE_UPRIGHT=3,
+		VIEW_MODE_UPRIGHT2=4
 	};
 
 	Sprite();

@@ -56,15 +56,6 @@ BBPixmap *bbLoadPixmapWithFreeImage( const std::string &path ){
 	BBPixmap *pm=d_new BBPixmap();
 	pm->trans=FreeImage_GetBPP( t_dib )==32||FreeImage_IsTransparent( t_dib );
 
-	// TODO: it would be nice, from a memory perspective, to
-	// support other pixel formats beyond RGBA.
-	// switch( int bpp=FreeImage_GetBPP( t_dib ) ){
-	// case 32:pm->format=PF_RGBA;break;
-	// case 24:pm->format=PF_RGB;break;
-	// case 8:case 4:pm->format=PF_RGB;break;
-	// default:RTEX( ("Unhandled image format: "+std::string(itoa(bpp))+" bpps").c_str() );
-	// }
-
 	FIBITMAP *dib=FreeImage_ConvertTo32Bits( t_dib );
 	pm->format=PF_RGBA;
 

@@ -18,12 +18,14 @@ void BBDevice::reset(){
 }
 
 void BBDevice::downEvent( int key,bool que ){
+	if( (unsigned)key>=256 ) return;
 	down_state[key]=true;
 	++hit_count[key];
 	if( que ) queue( key );
 }
 
 void BBDevice::upEvent( int key ){
+	if( (unsigned)key>=256 ) return;
 	down_state[key]=false;
 }
 
@@ -32,6 +34,7 @@ void BBDevice::queue( int code ){
 }
 
 void BBDevice::setDownState( int key,bool down ){
+	if( (unsigned)key>=256 ) return;
 	if( down==down_state[key] ) return;
 	if( down ) downEvent( key );
 	else upEvent( key );
@@ -44,11 +47,13 @@ void BBDevice::flush(){
 }
 
 bool BBDevice::keyDown( int key ){
+	if( (unsigned)key>=256 ) return false;
 	update();
 	return down_state[key];
 }
 
 int BBDevice::keyHit( int key ){
+	if( (unsigned)key>=256 ) return 0;
 	update();
 	int n=hit_count[key];
 	hit_count[key]-=n;
@@ -61,6 +66,7 @@ int BBDevice::getKey(){
 }
 
 float BBDevice::getAxisState( int axis ){
+	if( (unsigned)axis>=32 ) return 0;
 	update();
 	return axis_states[axis];
 }

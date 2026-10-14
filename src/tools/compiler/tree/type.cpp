@@ -7,6 +7,8 @@
 #include <llvm/IR/DerivedTypes.h>
 #endif
 
+bool bbTarget32 = false;
+
 static struct v_type : public Type{
 	bool canCastTo( Type *t ){
 		return t==Type::void_type;
@@ -35,11 +37,7 @@ static struct i_type : public Type{
 	}
 #ifdef USE_LLVM
 	llvm::Type *llvmType( llvm::LLVMContext *c ){
-#ifdef BB64
-		return llvm::Type::getInt64Ty( *c );
-#else
-		return llvm::Type::getInt32Ty( *c );
-#endif
+		return bbTarget32 ? llvm::Type::getInt32Ty( *c ) : llvm::Type::getInt64Ty( *c );
 	}
 	llvm::Constant *llvmZero( llvm::LLVMContext *c ){
 		return llvm::ConstantInt::getSigned( llvmType( c ),0 );
@@ -61,10 +59,10 @@ static struct f_type : public Type{
 
 #ifdef USE_LLVM
 	llvm::Type *llvmType( llvm::LLVMContext *c ){
-		return llvm::Type::getDoubleTy( *c );
+		return bbTarget32 ? llvm::Type::getFloatTy( *c ) : llvm::Type::getDoubleTy( *c );
 	}
 	llvm::Constant *llvmZero( llvm::LLVMContext *c ){
-		return llvm::ConstantFP::get( *c,llvm::APFloat(0.0) );
+		return llvm::ConstantFP::get( llvmType( c ),0.0 );
 	}
 #endif
 
@@ -231,9 +229,10 @@ llvm::GlobalVariable *VectorType::llvmDef( Codegen_LLVM *g ){
 		}
 
 		std::vector<llvm::Constant*> els;
-		els.push_back( llvm::ConstantInt::get( *g->context,llvm::APInt( 64,6  ) ) ); // type
-		els.push_back( llvm::ConstantInt::get( *g->context,llvm::APInt( 64,sz ) ) ); // size
-		els.push_back( gt );                                                         // elementType
+		llvm::Type *ity=Type::int_type->llvmType( g->context.get() );  // i32 on wasm32
+		els.push_back( llvm::ConstantInt::get( ity,6  ) ); // type
+		els.push_back( llvm::ConstantInt::get( ity,sz ) ); // size
+		els.push_back( gt );                               // elementType
 		auto init=llvm::ConstantStruct::get( g->bbVecType,els );
 
 		temp=new llvm::GlobalVariable( *g->module,g->bbVecType,false,llvm::GlobalValue::ExternalLinkage,nullptr,label );

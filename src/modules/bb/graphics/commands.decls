@@ -1,14 +1,11 @@
-; renderer
 CountRenderers%():"bbCountRenderers"
 RendererName$( renderer% ):"bbRendererName"
 SetRenderer%( name$ ):"bbSetRenderer"
 
-;gfx driver info
 CountGfxDrivers%():"bbCountGfxDrivers"
 GfxDriverName$( driver% ):"bbGfxDriverName"
 SetGfxDriver( driver% ):"bbSetGfxDriver"
 
-;gfx mode info
 CountGfxModes%():"bbCountGfxModes"
 GfxModeExists%( width%,height%,depth% ):"bbGfxModeExists"
 
@@ -24,7 +21,6 @@ GfxMode3DExists%( width%,height%,depth% ):"bbGfxMode3DExists"
 GfxMode3D%( mode% ):"bbGfxMode3D"
 Windowed3D%():"bbWindowed3D"
 
-;display mode
 Graphics( width%,height%,depth%=0,mode%=0 ):"bbGraphics"
 Graphics3D( width%,height%,depth%=0,mode%=0 ):"bbGraphics3D"
 EndGraphics():"bbEndGraphics"
@@ -46,14 +42,12 @@ GraphicsWidth%():"bbGraphicsWidth"
 GraphicsHeight%():"bbGraphicsHeight"
 GraphicsDepth%():"bbGraphicsDepth"
 
-;buffer management
 SetBuffer( buffer.BBCanvas ):"bbSetBuffer"
 GraphicsBuffer.BBCanvas():"bbGraphicsBuffer"
 LoadBuffer%( buffer.BBCanvas,bmpfile$ ):"bbLoadBuffer"
 SaveBuffer%( buffer.BBCanvas,bmpfile$ ):"bbSaveBuffer"
 BufferDirty( buffer.BBCanvas ):"bbBufferDirty"
 
-;fast pixel reads/write
 LockBuffer( buffer.BBCanvas=0 ):"bbLockBuffer"
 UnlockBuffer( buffer.BBCanvas=0 ):"bbUnlockBuffer"
 ReadPixel%( x%,y%,buffer.BBCanvas=0 ):"bbReadPixel"
@@ -65,7 +59,6 @@ CopyPixelFast( src_x%,src_y%,src_buffer.BBCanvas,dest_x%,dest_y%,dest_buffer.BBC
 
 CopyRect( source_x%,source_y%,width%,height%,dest_x%,dest_y%,src_buffer.BBCanvas=0,dest_buffer.BBCanvas=0 ):"bbCopyRect"
 
-;rendering
 Origin( x%,y% ):"bbOrigin"
 Viewport( x%,y%,width%,height% ):"bbViewport"
 Color( red%,green%,blue% ):"bbColor"
@@ -81,7 +74,6 @@ Oval( x%,y%,width%,height%,solid%=1 ):"bbOval"
 Line( x1%,y1%,x2%,y2% ):"bbLine"
 Text( x%,y%,text$,centre_x%=0,centre_y%=0 ):"bbText"
 
-;fonts
 LoadFont.BBFont( fontname$,height%=12,bold%=0,italic%=0,underline%=0 ):"bbLoadFont"
 FreeFont( font.BBFont ):"bbFreeFont"
 SetFont( font.BBFont ):"bbSetFont"
@@ -90,7 +82,6 @@ FontHeight%():"bbFontHeight"
 StringWidth%( string$ ):"bbStringWidth"
 StringHeight%( string$ ):"bbStringHeight"
 
-;movies
 OpenMovie.BBMovie( file$ ):"bbOpenMovie"
 DrawMovie%( movie.BBMovie,x%=0,y%=0,w%=-1,h%=-1 ):"bbDrawMovie"
 MovieWidth%( movie.BBMovie ):"bbMovieWidth"
@@ -98,7 +89,6 @@ MovieHeight%( movie.BBMovie ):"bbMovieHeight"
 MoviePlaying%( movie.BBMovie ):"bbMoviePlaying"
 CloseMovie( movie.BBMovie ):"bbCloseMovie"
 
-;images
 LoadImage.BBImage( bmpfile$ ):"bbLoadImage"
 LoadAnimImage.BBImage( bmpfile$,cellwidth%,cellheight%,first%,count% ):"bbLoadAnimImage"
 CopyImage.BBImage( image.BBImage ):"bbCopyImage"
@@ -135,7 +125,6 @@ RectsOverlap%( x1%,y1%,width1%,height1%,x2%,y2%,width2%,height2% ):"bbRectsOverl
 ImageRectOverlap%( image.BBImage,x%,y%,rect_x%,rect_y%,rect_width%,rect_height% ):"bbImageRectOverlap"
 ImageRectCollide%( image.BBImage,x%,y%,frame%,rect_x%,rect_y%,rect_width%,rect_height% ):"bbImageRectCollide"
 
-;console emu
 Write( string$ ):"bbWrite"
 Print( string$="" ):"bbPrint"
 Input$( prompt$="" ):"bbInput"

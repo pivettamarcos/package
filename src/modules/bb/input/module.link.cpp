@@ -10,6 +10,7 @@ BBMODULE_LINK( input ){
 	rtSym( "%GetKey%ascii=1","bbGetKey",bbGetKey );
 	rtSym( "%WaitKey","bbWaitKey",bbWaitKey );
 	rtSym( "FlushKeys","bbFlushKeys",bbFlushKeys );
+	rtSym( "$TextInput$s","bbTextInput",bbTextInput );
 	rtSym( "%MouseDown%button","bbMouseDown",bbMouseDown );
 	rtSym( "%MouseHit%button","bbMouseHit",bbMouseHit );
 	rtSym( "%GetMouse","bbGetMouse",bbGetMouse );

@@ -141,7 +141,6 @@ typedef struct BBData BBData;
 extern "C" {
 #endif
 
-// basic
 BBStr *	 BBCALL _bbStrLoad( BBStr **var );
 BBStr * BBCALL _bbStrCopy( BBStr *var );
 void	 BBCALL _bbStrRelease( BBStr *str );
@@ -200,7 +199,6 @@ bb_float_t	 BBCALL _bbFPow( bb_float_t x,bb_float_t y );
 void BBCALL _bbPushGosub( void *addr );
 void * BBCALL _bbPopGosub();
 
-// debug
 void BBCALL _bbDebugLog( const char *t );
 void BBCALL _bbDebugInfo( const char *e );
 void BBCALL _bbDebugError( const char *e );

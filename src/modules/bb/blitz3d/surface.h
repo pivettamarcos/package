@@ -23,7 +23,7 @@ public:
 		}
 
 		bool operator<( const Vertex &t )const{
-			return memcmp( this,&t,sizeof(*this) )==-1;
+			return memcmp( this,&t,sizeof(*this) )<0;
 		}
 	};
 

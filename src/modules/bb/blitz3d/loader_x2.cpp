@@ -1,7 +1,3 @@
-// This is a replacement loader for the original loader_x.cpp which requires
-// DX SDK components.
-//
-// https://learn.microsoft.com/en-us/windows/win32/direct3d9/dx9-graphics-reference-x-file-format
 
 #include <bb/blitz/app.h>
 #include <bb/filesystem/filesystem.h>
@@ -95,6 +91,9 @@ public:
 
 		Object( const std::string &t,const std::string &i ):tmpl(t),id(i){}
 		Object():Object( "","" ){}
+		~Object(){
+			for( auto &c:children ) delete c;
+		}
 
 		char *data(){
 			return blob.data();
@@ -209,16 +208,19 @@ public:
 	Brush parseMaterial( Object *obj ){
 		Brush brush;
 
-		float *color=(float*)obj->data();
-		brush.setColor( Vector( color[0],color[1],color[2] ) );
-		if( color[3] ) brush.setAlpha( color[3] );
+		if( obj->size()>=4*sizeof(float) ){
+			float *color=(float*)obj->data();
+			brush.setColor( Vector( color[0],color[1],color[2] ) );
+			if( color[3] ) brush.setAlpha( color[3] );
+		}
 
 		std::string tex;
 		for( auto& child:obj->children ){
 			if( child->tmpl=="TextureFileName"||child->tmpl=="TextureFilename" ){
+				if( child->size()<sizeof(dword) ) continue;
 				dword cnt=*(dword*)child->data();
-				// std::string tex( child->data()+4,cnt );
-				tex=std::string( child->data()+4,cnt );
+				if( cnt>child->size()-sizeof(dword) ) cnt=child->size()-sizeof(dword);
+				tex=std::string( child->data()+sizeof(dword),cnt );
 
 				brush.setTexture( 0,Texture( tex,0 ),0 );
 				brush.setColor( Vector( 1,1,1 ) );
@@ -234,32 +236,29 @@ public:
 	};
 
 	void parseMesh( Object *obj,MeshModel *mesh, std::map<std::string,Brush> &mats_map ){
-		//stuff...
 		std::vector<FaceX> faces;
 		std::vector<Brush> mats;
 
 		MeshLoader::beginMesh();
 
-		// log("parseMesh-start "+obj->id);
 
 		dword *data=(dword*)obj->data();
+		dword *dend=data+obj->size()/sizeof(dword);
 
-		//setup vertices
-		int num_verts=*data++;
-		// log("parseMesh-num_verts "+itoa(num_verts));
+		int num_verts= data<dend ? *data++ : 0;
 
-		for( int k=0;k<num_verts;++k ){
+		for( int k=0;k<num_verts && data+3<=dend;++k ){
 			Surface::Vertex v;
 			v.coords=*(Vector*)data;
 			if( conv ) v.coords=conv_tform * v.coords;
-			v.color=0xffffffff;//Vector(1,1,1);
+			v.color=0xffffffff;
 			MeshLoader::addVertex( v );
 			data+=3;
 		}
 
-		// setup faces
-		dword num_faces=*data++;
-		for( int k=0;k<num_faces;++k ){
+		dword num_faces= data<dend ? *data++ : 0;
+		for( dword k=0;k<num_faces && data<dend;++k ){
+			if( *data>=(size_t)(dend-data) ) break;
 			faces.push_back( FaceX( data ) );
 			data+=*data+1;
 		}
@@ -270,10 +269,11 @@ public:
 			std::string name=child->tmpl;
 			if( name=="MeshNormals" ){
 				dword *data=(dword*)child->data();
-				dword num_normals=*data++;
-				if( num_normals==num_verts ){
+				dword *cend=data+child->size()/sizeof(dword);
+				dword num_normals= data<cend ? *data++ : 0;
+				if( num_normals==(dword)num_verts && data+3*(size_t)num_normals<=cend ){
 					Matrix co=conv_tform.m.cofactor();
-					for( int k=0;k<num_normals;++k ){
+					for( dword k=0;k<num_normals;++k ){
 						Surface::Vertex &v=MeshLoader::refVertex(k);
 						v.normal=(co * *(Vector*)data).normalized();
 						data+=3;
@@ -281,11 +281,13 @@ public:
 					normals=true;
 				}
 			}else if( name=="MeshTextureCoords" ){
-				dword num_coords=*(dword*)child->data();
+				dword *cd=(dword*)child->data();
+				dword *cend=cd+child->size()/sizeof(dword);
+				dword num_coords= cd<cend ? *cd : 0;
 
-				if( num_coords==num_verts ){
+				if( num_coords==(dword)num_verts && cd+1+2*(size_t)num_coords<=cend ){
 					float *coords=(float*)(child->data()+4);
-					for( int k=0;k<num_coords;++k ){
+					for( dword k=0;k<num_coords;++k ){
 						Surface::Vertex &v=MeshLoader::refVertex(k);
 						float tu=*coords++;float tv=*coords++;
 						v.tex_coords[0][0]=v.tex_coords[1][0]=tu;
@@ -294,9 +296,10 @@ public:
 				}
 			} else if( name=="MeshMaterialList" ){
 				dword *data=(dword*)child->data();
-				dword num_mats=*data++;
-				dword num_faces=*data++;
-				for( dword k=0;k<num_faces;++k ){
+				dword *cend=data+child->size()/sizeof(dword);
+				dword num_mats= data<cend ? *data++ : 0;
+				dword num_faces= data<cend ? *data++ : 0;
+				for( dword k=0;k<num_faces && k<faces.size() && data<cend;++k ){
 					faces[k].mat_index=*data++;
 				}
 				for( auto &child:child->children ){
@@ -318,7 +321,6 @@ public:
 			}
 		}
 
-		// log("parseMesh-end ");
 
 		if( !mats.size() ) mats.push_back( Brush() );
 
@@ -328,10 +330,13 @@ public:
 			dword cnt=*data++;if( cnt<3 ) continue;
 			int tri[3];
 			tri[0]=data[0];
+			dword mi = f.mat_index<mats.size() ? f.mat_index : 0;
 			for( dword j=2;j<cnt;++j ){
 				tri[1]=data[j-1+flip_tris];
 				tri[2]=data[j-flip_tris];
-				MeshLoader::addTriangle( tri,mats[f.mat_index] );
+				if( tri[0]<0||tri[1]<0||tri[2]<0||
+					tri[0]>=num_verts||tri[1]>=num_verts||tri[2]>=num_verts ) continue;
+				MeshLoader::addTriangle( tri,mats[mi] );
 			}
 		}
 
@@ -368,24 +373,25 @@ public:
 			}else if( tmpl=="Mesh" ){
 				if( !animonly ) parseMesh( child,e,mats );
 			}else if( tmpl=="Material" ){
-				// nothing to do here...
 			}else{
 				log( "Unhandled object "+tmpl );
 			}
 		}
 
-		// log("parseFrame-end");
 		return e;
 	}
 
 	void parseAnimKey( Object *obj,MeshModel *e ){
 		dword *data=(dword*)obj->data();
+		dword *dend=data+obj->size()/sizeof(dword);
+		if( data+2>dend ) return;
 		dword type=*data++;
 		dword cnt=*data++;
 		Animation anim=e->getAnimation();
-		for( int k=0;k<cnt;++k ){
-			dword time=*data++;
+		for( dword k=0;k<cnt && data+2<=dend;++k ){
+			int time=*data++;
 			dword n=*data++;
+			if( n>(size_t)(dend-data) ) break;
 			if( time>anim_len ) anim_len=time;
 			switch( type ){
 			case 0:
@@ -394,7 +400,6 @@ public:
 					if( conv ){
 						if( fabs(rot.w)<1-EPSILON ){
 							rot.normalize();
-							//quat-to-axis/angle
 							float half=acosf( rot.w );
 							if( flip_tris ) half=-half;
 							rot=Quat( cosf( half ),(conv_tform.m*rot.v).normalized()*sinf( half ) );
@@ -423,13 +428,11 @@ public:
 		}
 		e->setAnimation( anim );
 
-		// log("parseAnimKey-end");
 	}
 
 	void parseAnim( Object *obj ){
 		MeshModel *frame=0;
 
-		// log("parseAnim-start");
 
 		for( auto &child:obj->children ){
 			if( child->tmpl=="DataReference" ){
@@ -446,7 +449,6 @@ public:
 			}
 		}
 
-		// log("parseAnim-end");
 	}
 
 	void parseAnimSet( Object *obj ){
@@ -458,9 +460,8 @@ public:
 	}
 
 	void eat( size_t sz ){
-		char c=get();
 		while( !eof()&&sz>0 ){
-			c=get();
+			char c=get();
 			if( !isspace(c) ) sz--;
 		}
 	}
@@ -474,19 +475,18 @@ public:
 			t.type=c;
 			if( c==TOKEN_NAME ){
 				dword count=readInt();
+				if( count>0x100000 ) ex( "name too long" );
 				t.text.resize( count );
 				read( t.text.data(),count );
 			}else if( c==TOKEN_GUID ){
-				dword data1=readInt();
-				dword data2=readShort();
-				dword data3=readShort();
+				readInt();readShort();readShort();
 				readInt();readInt();
 			}else if( c==TOKEN_STRING||c==TOKEN_INTEGER_LIST||c==TOKEN_FLOAT_LIST ){
 			}else if( c==TOKEN_OBRACE ){
 				t.text="{";
-			}else if( c==TOKEN_CPAREN ){
-				t.text="(";
 			}else if( c==TOKEN_OPAREN ){
+				t.text="(";
+			}else if( c==TOKEN_CPAREN ){
 				t.text=")";
 			}else if( c==TOKEN_CBRACE ){
 				t.text="}";
@@ -535,7 +535,7 @@ public:
 			if( eof() ) return Token( TOKEN_EOF,"<end-of-file>" );
 
 			std::string s( 1,c );
-			if( isalpha(c)||peek()=='_' ){
+			if( isalpha(c)||c=='_' ){
 				char p;
 				while( isalnum(p=peek())||p=='_'||p=='-' ) s+=get();
 
@@ -545,22 +545,29 @@ public:
 					t.type=TOKEN_NAME;
 				}
 			}else if( isdigit(c)||c=='-' ){
+				bool dotted=false,expo=false;
 				while( isdigit(peek()) ) s+=get();
 				if( peek()=='.' ){
+					dotted=true;
 					s+=get();
 					while( isdigit(peek()) ) s+=get();
-					if( peek()=='E' ){
-						s+=get();
-						s+=get();
-						while( isdigit(peek()) ) s+=get();
-					}
-					t.type=TOKEN_FLOAT;
+				}
+				if( peek()=='E'||peek()=='e' ){
+					expo=true;
+					s+=get();
+					if( peek()=='+'||peek()=='-' ) s+=get();
+					while( isdigit(peek()) ) s+=get();
+				}
+				if( !dotted && (isalnum(peek())||peek()=='_') ){
+					char p;
+					while( isalnum(p=peek())||p=='_'||p=='-' ) s+=get();
+					t.type=TOKEN_NAME;
 				}else{
-					t.type=TOKEN_INTEGER;
+					t.type=(dotted||expo)?TOKEN_FLOAT:TOKEN_INTEGER;
 				}
 			}else if( c=='"' ){
 				s="";
-				while( peek()!='"' ) s+=get();
+				while( !eof()&&peek()!='"' ) s+=get();
 				get();
 				t.type=TOKEN_STRING;
 			}else if( c=='{' ){
@@ -581,9 +588,9 @@ public:
 				t.type=TOKEN_COMMA;
 			}else if( c==';' ){
 				t.type=TOKEN_SEMICOLON;
-			}else if( c=='#'||c=='/'&&peek()=='/' ){
+			}else if( c=='#'||(c=='/'&&peek()=='/') ){
 				t.type=TOKEN_COMMENT;
-				while( peek()!='\n' ) s+=get();
+				while( !eof()&&peek()!='\n' ) s+=get();
 			}
 			t.text=s;
 		}
@@ -597,7 +604,7 @@ public:
 
 		t=readToken();
 		if( t!="{" ){
-			if( t!=TOKEN_NAME ){
+			if( t!=TOKEN_NAME && t!=TOKEN_INTEGER ){
 				ex( "Expected name, but got "+t.text );
 			}
 			id=t.text;
@@ -608,6 +615,9 @@ public:
 		if( t=="<" ){
 			eat(36);
 			expect( ">" );
+			t=readToken();
+		}else if( t==TOKEN_GUID ){
+			t=readToken();
 		}
 
 		tmp.blob.clear();
@@ -616,7 +626,6 @@ public:
 		Object *obj=d_new Object( tmpl,id );
 		if( id!="" ) objects[tmpl][id]=obj;
 
-		bool data=true;
 		do {
 			if( t=="}" ) break;
 
@@ -627,7 +636,11 @@ public:
 					if( t==TOKEN_NAME ){
 						obj->children.push_back( parseObject( t ) );
 					}else if( t==TOKEN_OBRACE ){
-						Object *ref=d_new Object( "DataReference",expectName() );
+						Token rt=readToken();
+						if( rt!=TOKEN_NAME && rt!=TOKEN_INTEGER ){
+							ex( "Expected name, but got "+rt.text );
+						}
+						Object *ref=d_new Object( "DataReference",rt.text );
 						obj->children.push_back( ref );
 						expect( "}" );
 					}
@@ -641,17 +654,17 @@ public:
 				case TOKEN_STRING:
 					{
 						dword count=readInt();
+						if( count>0x1000000 ) ex( "string too long" );
 						char *data=tmp.expand( sizeof(dword)+count );
-						*data=count;
+						memcpy( data,&count,sizeof(count) );
 						if( count>0 ) read( data+sizeof(dword),count );
 					}
 					readShort();
 					break;
-				// case TOKEN_INTEGER:
-				// case TOKEN_GUID:
 				case TOKEN_INTEGER_LIST:
 					{
 						dword count=readInt();
+						if( count>0x1000000 ) ex( "list too long" );
 						int_list list;list.resize( count );
 						read( (char*)list.data(),count*sizeof(dword) );
 						tmp.add( list );
@@ -660,6 +673,7 @@ public:
 				case TOKEN_FLOAT_LIST:
 					{
 						dword count=readInt();
+						if( count>0x1000000 ) ex( "list too long" );
 						size_t len=count*sizeof(float);
 						float *data=(float*)tmp.expand( len );
 						if( float_bits==32 ){
@@ -680,7 +694,7 @@ public:
 				Token next=t;
 
 				switch( next.type ){
-				case TOKEN_COMMA:case TOKEN_SEMICOLON:
+				case TOKEN_COMMA:case TOKEN_SEMICOLON:case TOKEN_COMMENT:
 					break;
 				case TOKEN_INTEGER:
 					{
@@ -705,7 +719,6 @@ public:
 		} while( !eof() );
 
 		obj->blob=tmp.blob;
-		// expect( "}" );
 		return obj;
 	}
 
@@ -721,7 +734,8 @@ public:
 			}else if( t==TOKEN_TEMPLATE ){
 				expectName();
 				expect( "{" );
-				while( readToken().text!="}" ){}
+				Token skip;
+				while( (skip=readToken())!="}" && skip!=TOKEN_EOF ){}
 			}
 		}
 
@@ -733,12 +747,14 @@ public:
 				t->setParent( e );
 			}else if( obj->tmpl=="AnimationSet" ){
 				if( !collapse ) parseAnimSet( obj );
-			}else if( obj->tmpl=="Header"||obj->tmpl=="Material" ){
-				// nothing to do...
+			}else if( obj->tmpl=="Header"||obj->tmpl=="Material"||obj->tmpl=="AnimTicksPerSecond" ){
 			}else{
 				log( "Unhandled object "+obj->tmpl );
 			}
 		}
+
+		for( auto &obj:objs ) delete obj;
+		objects.clear();
 
 		return e;
 	}
@@ -764,6 +780,7 @@ public:
 MeshModel *Loader_X2::load( const std::string &filename,const Transform &t,int hint ){
 	conv_tform=t;
 	conv=flip_tris=false;
+	anim_len=0;
 	if( conv_tform!=Transform() ){
 		conv=true;
 		if( conv_tform.m.i.cross(conv_tform.m.j).dot(conv_tform.m.k)<0 ) flip_tris=true;
@@ -777,9 +794,9 @@ MeshModel *Loader_X2::load( const std::string &filename,const Transform &t,int h
 	}
 
 	XParser x( in );
-	if( x.readInt()!=XOFFILE_FORMAT_MAGIC ) return 0;
-	if( x.readShort()!=XOFFILE_FORMAT_MAJOR_VERSION ) return 0;
-	x.readShort(); // minor version
+	if( x.readInt()!=XOFFILE_FORMAT_MAGIC ){ delete in;return 0; }
+	if( x.readShort()!=XOFFILE_FORMAT_MAJOR_VERSION ){ delete in;return 0; }
+	x.readShort();
 
 	switch( x.readInt() ){
 	case XOFFILE_FORMAT_BINARY:
@@ -789,6 +806,7 @@ MeshModel *Loader_X2::load( const std::string &filename,const Transform &t,int h
 		x.setFormat( XParser::TEXT );
 		break;
 	default:
+		delete in;
 		return 0;
 	}
 
@@ -800,6 +818,7 @@ MeshModel *Loader_X2::load( const std::string &filename,const Transform &t,int h
 		x.setFloatBits( 64 );
 		break;
 	default:
+		delete in;
 		return 0;
 	}
 

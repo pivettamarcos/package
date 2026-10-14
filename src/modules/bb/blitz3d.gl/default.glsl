@@ -14,6 +14,7 @@ uniform samplerCube bbTextureCube[8];
 struct BBLightData {
   mat4 TForm;
   vec4 Color;
+  vec4 Params;
 } ;
 
 layout(std140) uniform BBLightState {
@@ -22,7 +23,6 @@ layout(std140) uniform BBLightState {
   int LightsUsed;
 } LS;
 
-// must be mindful of alignment when ordering...
 struct BBTextureState {
   mat4 TForm;
   int Blend,SphereMap,Flags,CubeMap;
@@ -43,6 +43,7 @@ layout(std140) uniform BBRenderState {
   int FullBright;
   int FogMode;
   int AlphaTest;
+  float AlphaRef;
 } RS;
 
 #ifdef VERTEX
@@ -77,22 +78,7 @@ float fogFactorLinear(
   return 1.0 - clamp((end - dist) / (end - start), 0.0, 1.0);
 }
 
-vec2 sphereMap(in vec3 normal, in vec3 ecPosition3){
-  float m;
-  vec3 r, u;
-  u = normalize(ecPosition3);
-  r = reflect(u, normal);
-  m = 2.0 * sqrt(r.x * r.x + r.y * r.y + (r.z + 1.0) * (r.z + 1.0));
-  return vec2 (r.x / m + 0.5, r.y / m + 0.5);
-}
-
-
-
-
 #ifdef VERTEX
-/**
- * VERTEX
- **/
 
 layout(location = 0) in vec3 bbPosition;
 layout(location = 1) in vec3 bbNormal;
@@ -107,20 +93,24 @@ void main() {
 
   bbVertex_Position = bbPosition;
 
+  vec3 ecPosition = (bbModelViewMatrix * vec4(bbPosition, 1.0)).xyz;
+
   gl_Position = bbModelViewProjectionMatrix * vec4(bbPosition, 1.0);
 
   vec3 EyeNormal = bbNormalMatrix * bbNormal;
+  float bbNsq = dot(EyeNormal, EyeNormal);
+  vec3 UnitNormal = bbNsq > 0.0 ? EyeNormal*inversesqrt(bbNsq) : vec3(0.0);
 
   for( int i=0;i<RS.TexturesUsed;i++ ){
     vec2 coord;
     if( RS.Texture[i].SphereMap==1 ) {
-      coord=sphereMap( EyeNormal,gl_Position.xyz/gl_Position.w );
-    }else if( RS.Texture[i].Flags==1 ) {
+      coord = UnitNormal.xy*vec2(0.5,-0.5)+vec2(0.5,0.5);
+    }else if( (RS.Texture[i].Flags & 1)!=0 ) {
       coord=bbTexCoord1;
     }else {
       coord=bbTexCoord0;
     }
-    bbVertex_TexCoord[i] = (RS.Texture[i].TForm * vec4(coord, 0.0, 1.0)).xy;
+    bbVertex_TexCoord[i] = (RS.Texture[i].TForm * vec4(coord, 1.0, 1.0)).xy;
   }
 
 
@@ -132,7 +122,7 @@ void main() {
   }
 
   if( RS.FullBright==0 ){
-    bbVertex_Normal = normalize( EyeNormal );
+    bbVertex_Normal = UnitNormal;
 
     vec4 Diffuse=vec4( 0.0 ),Specular=vec4( 0.0 );
 
@@ -140,36 +130,48 @@ void main() {
       float nDotVP,nDotHV,pf;
 
       vec3 LightPos=normalize( mat3( bbViewMatrix*LS.Light[i].TForm*rotationMatrix( vec3(1.0,0.0,0.0), 1.5708 ) )*vec3(0.0,1.0,0.0) );
+      float atten=1.0;
+
+      if( LS.Light[i].Params.x>1.5 ){
+        vec3 lightPosEye=( bbViewMatrix*vec4( LS.Light[i].TForm[3].xyz,1.0 ) ).xyz;
+        vec3 toLight=lightPosEye-ecPosition;
+        float dist=max( length( toLight ),0.0001 );
+        vec3 dirToLight=toLight/dist;
+        atten=LS.Light[i].Params.y/dist;
+        if( LS.Light[i].Params.x>2.5 ){
+          float cosA=dot( dirToLight,LightPos );
+          atten*=clamp( (cosA-LS.Light[i].Params.z)/max( LS.Light[i].Params.w-LS.Light[i].Params.z,0.0001 ),0.0,1.0 );
+        }
+        LightPos=dirToLight;
+      }
+
       vec3 halfVector = normalize( LightPos+vec3( 0.0,0.0,-1.0 ));
 
       nDotVP = max( 0.0,dot( bbVertex_Normal,LightPos ) );
       nDotHV = max( 0.0,dot( bbVertex_Normal,vec3( halfVector )));
       pf = pow( nDotHV,100.0 )*float(nDotVP!=0.0);
 
-      Diffuse  += LS.Light[i].Color * nDotVP;
-      Specular += LS.Light[i].Color * pf;
+      Diffuse  += LS.Light[i].Color * (nDotVP*atten);
+      Specular += LS.Light[i].Color * (pf*atten);
     }
 
     bbVertex_Color = RS.Ambient * bbMaterialColor +
                      Diffuse    * bbMaterialColor +
                      Specular   * vec4( 1.0 );
     bbVertex_Color = clamp( bbVertex_Color, 0.0, 1.0 );
-    bbVertex_Color.a = bbMaterialColor.a; // TODO: is this right?
+    bbVertex_Color.a = bbMaterialColor.a;
   }else{
     bbVertex_Color = bbMaterialColor;
   }
 
   switch( RS.FogMode ){
   case FOG_NONE: break;
-  case FOG_LINEAR: bbVertex_FogFactor=fogFactorLinear( length( gl_Position.xyz ),RS.FogRange.x,RS.FogRange.y );break;
+  case FOG_LINEAR: bbVertex_FogFactor=fogFactorLinear( abs( ecPosition.z ),RS.FogRange.x,RS.FogRange.y );break;
   }
 }
 #endif
 
 #ifdef FRAGMENT
-/**
- * FRAGMENT
- **/
 
 out vec4 bbFragColor;
 
@@ -196,14 +198,17 @@ vec4 Blend( vec4 t0,vec4 t1,int i ){
   case BLEND_ALPHA:    return mix(t0, t1, t1.a);
   case BLEND_MULTIPLY: return t0*t1;
   case BLEND_ADD:      return t0+t1;
+  case BLEND_DOT3: {
+    float d = clamp( 4.0*dot( t0.rgb-vec3(0.5),t1.rgb-vec3(0.5) ),0.0,1.0 );
+    return vec4( d,d,d,t0.a );
+  }
+  case BLEND_MULTIPLY2: return vec4( clamp( t0.rgb*t1.rgb*2.0,vec3(0.0),vec3(1.0) ),t0.a*t1.a );
   }
 }
 
 void main() {
   bbFragColor=bbVertex_Color;
 
-  // TODO: ES doesn't allow dynamic indexing of uniforms
-  // so this (should) force the various compilers to unroll.
   #define ProcessTexture(i) if( i<RS.TexturesUsed ) bbFragColor=Blend( bbFragColor,RS.Texture[i].CubeMap!=1?Sample2D(bbTexture[i],i):SampleCube(bbTextureCube[i]),i );
   ProcessTexture(0);
   ProcessTexture(1);
@@ -219,7 +224,7 @@ void main() {
     bbFragColor=mix( bbFragColor,fogColor,bbVertex_FogFactor );
   }
 
-  if( RS.AlphaTest==1 && bbFragColor.a==0.0 ){
+  if( RS.AlphaTest==1 && bbFragColor.a*255.0<=RS.AlphaRef ){
     discard;
   }
 }

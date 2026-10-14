@@ -4,6 +4,7 @@
 #include "stream.h"
 
 class WAVAudioStream : public AudioStream{
+	std::streamoff data_end;
 public:
 	WAVAudioStream( int buf_size);
 	bool readHeader();
@@ -11,6 +12,8 @@ public:
 	void seek( long pos );
 	long pos();
 	size_t decode();
+
+	double toSeconds( long pos );
 };
 
 

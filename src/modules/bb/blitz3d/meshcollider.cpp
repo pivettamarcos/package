@@ -53,7 +53,6 @@ bool MeshCollider::collide( const Line &line,float radius,Collision *curr_coll,c
 
 	if( !tree ) return false;
 
-	//create local box
 	Box box( line );
 	box.expand( radius );
 	Box local_box=-t * box;
@@ -82,7 +81,6 @@ bool MeshCollider::collide( const Box &line_box,const Line &line,float radius,co
 		const Vector &t_v1=vertices[ tri.verts[1] ].coords;
 		const Vector &t_v2=vertices[ tri.verts[2] ].coords;
 
-		//tri box
 		Box tri_box( t_v0 );
 		tri_box.update( t_v1 );
 		tri_box.update( t_v2 );
@@ -123,8 +121,6 @@ MeshCollider::Node *MeshCollider::createNode( const std::vector<int> &tris ){
 	Node *c=d_new Node;
 	c->box=nodeBox( tris );
 
-	//find longest axis
-	//
 	float max=c->box.width();
 	if( c->box.height()>max ) max=c->box.height();
 	if( c->box.depth()>max ) max=c->box.depth();
@@ -132,8 +128,6 @@ MeshCollider::Node *MeshCollider::createNode( const std::vector<int> &tris ){
 	if( max==c->box.height() ) axis=1;
 	else if( max==c->box.depth() ) axis=2;
 
-	//sort by axis
-	//
 	unsigned int k;
 	std::multimap<float,int> axis_map;
 	for( k=0;k<tris.size();++k ){
@@ -141,8 +135,6 @@ MeshCollider::Node *MeshCollider::createNode( const std::vector<int> &tris ){
 		axis_map.insert( p );
 	}
 
-	//generate left node
-	//
 	std::vector<int> new_tris;
 	std::multimap<float,int>::iterator it=axis_map.begin();
 	for( k=axis_map.size()/2;k--;++it ){
@@ -150,8 +142,6 @@ MeshCollider::Node *MeshCollider::createNode( const std::vector<int> &tris ){
 	}
 	c->left=createNode( new_tris );
 
-	//generate right node
-	//
 	new_tris.clear();
 	for( ;it!=axis_map.end();++it ){
 		new_tris.push_back( it->second );

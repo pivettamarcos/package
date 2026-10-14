@@ -5,15 +5,9 @@
 
 #undef CDECL
 
-#ifdef WIN32
-#define BBDECL __declspec(dllexport)
-#define BBCALL __stdcall
-#define CDECL __cdecl
-#else
 #define BBDECL __attribute__((visibility("default")))
 #define BBCALL
 #define CDECL
-#endif
 
 #define BBLIB extern "C"
 

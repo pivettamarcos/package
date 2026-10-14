@@ -4,6 +4,8 @@
 
 #include "decl.h"
 
+extern bool bbTarget32;
+
 #ifdef USE_LLVM
 #include <llvm/IR/Type.h>
 #include <llvm/IR/LLVMContext.h>

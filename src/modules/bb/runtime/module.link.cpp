@@ -9,4 +9,7 @@ BBMODULE_LINK( runtime ){
 	rtSym( "HidePointer","bbHidePointer",bbHidePointer );
 	rtSym( "RuntimeError$message","bbRuntimeError",bbRuntimeError );
 	rtSym( "MoveMouse%x%y","bbMoveMouse",bbMoveMouse );
+	rtSym( "InitErrorMsgs%number%hasMacro=0","bbInitErrorMsgs",bbInitErrorMsgs );
+	rtSym( "SetErrorMsg%pos$message","bbSetErrorMsg",bbSetErrorMsg );
+	rtSym( "MemoryAccessViolation","bbMemoryAccessViolation",bbMemoryAccessViolation );
 }

@@ -13,19 +13,16 @@ class BBFont{
 public:
 	virtual ~BBFont();
 
-	/***** GX INTERFACE *****/
-public:
 	enum{
 		FONT_BOLD=1,
 		FONT_ITALIC=2,
 		FONT_UNDERLINE=4
 	};
 
-	//ACCESSORS
-	virtual int getWidth()const=0;							//width of widest char
-	virtual int getHeight()const=0;							//height of font
-	virtual int getWidth( const std::string &text )const=0;	//width of string
-	virtual bool isPrintable( int chr )const=0;				//printable char?
+	virtual int getWidth()const=0;
+	virtual int getHeight()const=0;
+	virtual int getWidth( const std::string &text )const=0;
+	virtual bool isPrintable( int chr )const=0;
 };
 
 class BBImageFont : public BBFont{
@@ -49,6 +46,8 @@ private:
 	BBImageFont( FT_Face f,int height,float density );
 
 public:
+	~BBImageFont();
+
 	static BBImageFont *load( const std::string &name,int height,float density,int flags );
 
 	bool loadChar( uint32_t c )const;

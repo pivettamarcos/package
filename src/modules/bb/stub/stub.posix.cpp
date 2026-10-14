@@ -69,19 +69,12 @@ void dump_backtrace(int sig) {
 
 	fprintf(stderr, "Error (%d):\n", sig);
 	backtrace_symbols_fd( array,size,STDERR_FILENO );
-
-	// exit( 1 );
 }
 #endif
 
 extern "C"
 int BBCALL bbStart( int argc,char *argv[], BBMAIN bbMain ) {
-#ifdef BB_BACKTRACE
-	// signal(SIGSEGV, dump_backtrace);
-#endif
-
 #ifdef BB_MACOS
-	// TODO: this is a little bit of a hack...but it should work for now.
 	char path[PATH_MAX];
 	uint32_t path_len=sizeof( path );
 	_NSGetExecutablePath( path,&path_len );

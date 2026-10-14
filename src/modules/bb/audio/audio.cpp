@@ -16,9 +16,9 @@ static BBSound *loadSound( BBStr *f,bool use_3d ){
 	return gx_audio ? gx_audio->loadSound( t,use_3d ) : 0;
 }
 
-static BBChannel *playMusic( BBStr *f,bool use_3d ){
+static BBChannel *playMusic( BBStr *f,bool use_3d,bool loop=false ){
 	std::string t=canonicalpath(*f);delete f;
-	return gx_audio ? gx_audio->playFile( t,use_3d ) : 0;
+	return gx_audio ? gx_audio->playFile( t,use_3d,loop ) : 0;
 }
 
 BBSound * BBCALL bbLoadSound( BBStr *f ){
@@ -61,8 +61,8 @@ BBChannel * BBCALL bbPlaySound( BBSound *sound ){
 	return sound->play();
 }
 
-BBChannel * BBCALL bbPlayMusic( BBStr *f ){
-	return playMusic( f,false );
+BBChannel * BBCALL bbPlayMusic( BBStr *f,bb_int_t mode ){
+	return playMusic( f,false,mode!=0 );
 }
 
 BBChannel * BBCALL bbPlayCDTrack( bb_int_t track,bb_int_t mode ){

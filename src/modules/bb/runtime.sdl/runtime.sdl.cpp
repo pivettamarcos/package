@@ -5,17 +5,13 @@
 #include <bb/system/system.h>
 #include <bb/input/input.h>
 #include <bb/hook/hook.h>
-#ifdef BB_NDK
-#include <bb/system/system.ndk.h>
+#ifdef BB_WEBGPU
+#include <bb/graphics.webgpu/graphics.webgpu.h>
 #endif
-
-#include <SDL_syswm.h>
-
-#include <map>
 
 #include "scancodes.cpp"
 
-#include <bb/input/input.h>
+static int em_virt_x=0,em_virt_y=0;
 
 class SDLInputDriver : public BBInputDriver{
 public:
@@ -57,19 +53,14 @@ public:
 	}
 };
 
-std::map<SDL_Window*,SDLRuntime*> runtimes;
-
 BBRuntime *bbCreateOpenGLRuntime(){
 	return d_new SDLRuntime();
 }
 
 SDLRuntime::SDLRuntime(){
-	// runtimes.insert( make_pair( wnd,this ) );
-	// bbAppOnChange.add( _refreshTitle,this );
 }
 
 SDLRuntime::~SDLRuntime(){
-	// bbAppOnChange.del( _refreshTitle,this );
 	SDL_Quit();
 }
 
@@ -86,12 +77,13 @@ void SDLRuntime::afterCreate(){
 		}
 	}
 
-#ifdef BB_NDK
-	bbSetJNI( (jobject)SDL_AndroidGetActivity(),(JNIEnv*)SDL_AndroidGetJNIEnv() );
-#endif
-
+#ifdef BB_WEBGPU
+	if( !BBContextDriver::change( "webgpu" ) ){
+		LOGD( "%s","[webgpu] context driver missing" );
+	}
+#else
 	BBContextDriver::change( "sdl" );
-	bbDefaultGraphics();
+#endif
 }
 
 void SDLRuntime::asyncStop(){
@@ -108,12 +100,32 @@ bool SDLRuntime::idle(){
 	while( SDL_PollEvent(&event) ){
 		if( event.type == SDL_QUIT ){
 			RTEX( 0 );
-		}else if( event.type==SDL_WINDOWEVENT ){
-			if( event.window.event==SDL_WINDOWEVENT_RESIZED ) {
-			}
 		}else if( event.type==SDL_MOUSEMOTION ){
-			BBEvent ev( BBEVENT_MOUSEMOVE,0,event.motion.x,event.motion.y );
-			bbOnEvent.run( &ev );
+			if( SDL_GetRelativeMouseMode()==SDL_TRUE ){
+				em_virt_x+=event.motion.xrel;
+				em_virt_y+=event.motion.yrel;
+				if( SDL_Window *w=SDL_GetWindowFromID( event.motion.windowID ) ){
+					int ww=0,wh=0;
+					SDL_GetWindowSize( w,&ww,&wh );
+					if( em_virt_x<0 ) em_virt_x=0; else if( ww>0 && em_virt_x>=ww ) em_virt_x=ww-1;
+					if( em_virt_y<0 ) em_virt_y=0; else if( wh>0 && em_virt_y>=wh ) em_virt_y=wh-1;
+				}
+				BBEvent ev( BBEVENT_MOUSEMOVE,0,em_virt_x,em_virt_y );
+				bbOnEvent.run( &ev );
+			}else{
+				em_virt_x=event.motion.x;em_virt_y=event.motion.y;
+				BBEvent ev( BBEVENT_MOUSEMOVE,0,event.motion.x,event.motion.y );
+				bbOnEvent.run( &ev );
+			}
+		}else if( event.type==SDL_MOUSEWHEEL ){
+			int notches=event.wheel.y;
+#if SDL_VERSION_ATLEAST(2,0,4)
+			if( event.wheel.direction==SDL_MOUSEWHEEL_FLIPPED ) notches=-notches;
+#endif
+			if( notches ){
+				BBEvent ev( BBEVENT_MOUSEWHEEL,notches*120 );
+				bbOnEvent.run( &ev );
+			}
 		}else if( event.type==SDL_MOUSEBUTTONDOWN||event.type==SDL_MOUSEBUTTONUP ){
 			int button=0;
 			switch( event.button.button ){
@@ -151,7 +163,6 @@ bool SDLRuntime::idle(){
 
 			if( event.type==SDL_KEYDOWN ){
 				BBEvent ev=BBEvent( BBEVENT_CHAR,0 );
-				// LOGD( "code=%i",code );
 				switch( code ){
 				case SDL_SCANCODE_BACKSPACE:
 					ev.data='\b';
@@ -175,7 +186,6 @@ bool SDLRuntime::idle(){
 				if( ev.data ) bbOnEvent.run( &ev );
 			}
 		}else if( event.type==SDL_TEXTINPUT||event.type==SDL_TEXTEDITING ){
-			// LOGD( "text: %s",event.text.text );
 			char *c=event.text.text;
 			while( *c ){
 				BBEvent ev=BBEvent( BBEVENT_CHAR,*(c++) );
@@ -188,24 +198,23 @@ bool SDLRuntime::idle(){
 }
 
 void *SDLRuntime::window(){
-	auto graphics=(SDLGraphics*)((SDLContextDriver*)bbContextDriver)->getGraphics();
-	if( !graphics ) return 0;
-#ifdef WIN32
-	SDL_SysWMinfo info;
-	SDL_VERSION( &info.version );
-	SDL_GetWindowWMInfo( graphics->wnd,&info );
-	return info.info.win.window;
-#else
 	return 0;
-#endif
 }
 
 void SDLRuntime::moveMouse( int x,int y ){
-	auto graphics=(SDLGraphics*)((SDLContextDriver*)bbContextDriver)->getGraphics();
-	graphics->moveMouse( x,y );
+	BBGraphics *graphics=bbContextDriver?bbContextDriver->getGraphics():0;
+	if( !graphics ) return;
+	em_virt_x=x;em_virt_y=y;
+#ifdef BB_WEBGPU
+	((WebGPUGraphics*)graphics)->moveMouse( x,y );
+#else
+	((SDLGraphics*)graphics)->moveMouse( x,y );
+#endif
 }
 
 void SDLRuntime::setPointerVisible( bool vis ){
+	SDL_bool rel=vis?SDL_FALSE:SDL_TRUE;
+	if( SDL_GetRelativeMouseMode()!=rel ) SDL_SetRelativeMouseMode( rel );
 	SDL_ShowCursor( vis?SDL_ENABLE:SDL_DISABLE );
 }
 
@@ -214,7 +223,6 @@ void SDLRuntime::_refreshTitle( void *data,void *context ){
 }
 
 void SDLRuntime::setTitle( const char *title ){
-	// SDL_SetWindowTitle( wnd,title );
 }
 
 BBMODULE_CREATE( runtime_sdl ){

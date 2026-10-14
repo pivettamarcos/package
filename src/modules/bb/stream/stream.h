@@ -13,16 +13,12 @@ public:
 	BBStream();
 	virtual ~BBStream();
 
-	//returns chars read
 	virtual int read( char *buff,int size )=0;
 
-	//returns chars written
 	virtual int write( const char *buff,int size )=0;
 
-	//returns chars avilable for reading
 	virtual int avail()=0;
 
-	//returns EOF status
 	virtual int eof()=0;
 };
 

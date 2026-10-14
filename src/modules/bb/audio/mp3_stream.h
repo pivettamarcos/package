@@ -7,6 +7,7 @@
 class MP3AudioStream : public AudioStream{
 public:
 	MP3AudioStream( int buf_size );
+	~MP3AudioStream();
 	bool readHeader();
 
 	void seek( long pos );

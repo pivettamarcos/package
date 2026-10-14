@@ -6,17 +6,16 @@
 #include <string>
 
 class BBFont;
+struct BBPixmap;
 
 class BBCanvas{
 public:
-  virtual void backup()const=0; // TODO: figure out if we can make this private...
+  virtual void backup()const=0;
 
 protected:
 	int flags;
 
-  /***** GX INTERFACE *****/
 public:
-  // TODO: move these into 'blitz3d'
   enum{
     CANVAS_TEX_RGB=			0x0001,
     CANVAS_TEX_ALPHA=		0x0002,
@@ -47,7 +46,6 @@ public:
 	virtual void unset()=0;
 	virtual void set()=0;
 
-	//MANIPULATORS
 	virtual void setFont( BBFont *font )=0;
 	virtual void setMask( unsigned argb )=0;
 	virtual void setColor( unsigned argb )=0;
@@ -69,6 +67,9 @@ public:
 	virtual bool collide( int x,int y,const BBCanvas *src,int src_x,int src_y,bool solid )=0;
 	virtual bool rect_collide( int x,int y,int rect_x,int rect_y,int rect_w,int rect_h,bool solid )=0;
 
+	virtual BBPixmap *getPixmap(){ return 0; }
+	virtual bool stretchTo( BBCanvas *dest,bool filter ){ return false; }
+
 	virtual bool lock()=0;
 	virtual void setPixel( int x,int y,unsigned argb )=0;
 	virtual void setPixelFast( int x,int y,unsigned argb )=0;
@@ -81,7 +82,6 @@ public:
 	virtual void setCubeMode( int mode )=0;
 	virtual void setCubeFace( int face )=0;
 
-	//ACCESSORS
 	virtual int getWidth()const=0;
 	virtual int getHeight()const=0;
 	virtual int getDepth()const=0;
@@ -97,7 +97,6 @@ public:
 	virtual unsigned getClsColor()const=0;
 
 	BBCanvas():flags(0){}
-	BBCanvas( bb_int_t t ){}
 	virtual ~BBCanvas();
 };
 

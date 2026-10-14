@@ -24,6 +24,7 @@ BBStr * BBCALL bbRSet( BBStr *string,bb_int_t size );
 BBStr * BBCALL bbChr( bb_int_t ascii );
 bb_int_t BBCALL bbAsc( BBStr *string );
 bb_int_t BBCALL bbLen( BBStr *string );
+bb_int_t BBCALL bbIsValidUTF8String( BBStr *str );
 BBStr * BBCALL bbHex( bb_int_t value );
 BBStr * BBCALL bbBin( bb_int_t value );
 

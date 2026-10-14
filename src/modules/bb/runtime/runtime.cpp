@@ -11,19 +11,10 @@ BBHook *bbRuntimeOnResume;
 #include <cstdlib>
 #include <iostream>
 
-//start up error
-#ifdef WIN32
 void sue( const char *t ){
-	std::string p=std::string( "Startup Error: " )+t;
-	_bbDebugInfo( p.c_str() );
 	std::cerr<<t<<std::endl;
+	exit(1);
 }
-#else
-void sue( const char *t ){
-  std::cerr<<t<<std::endl;
-  exit(1);
-}
-#endif
 
 BBRuntime::~BBRuntime(){
 }
@@ -51,13 +42,13 @@ void BBCALL bbHidePointer(){
 }
 
 BBMODULE_CREATE( runtime ){
-  bbRuntimeOnSuspend=d_new BBHook();
-  bbRuntimeOnResume=d_new BBHook();
-  return true;
+	bbRuntimeOnSuspend=d_new BBHook();
+	bbRuntimeOnResume=d_new BBHook();
+	return true;
 }
 
 BBMODULE_DESTROY( runtime ){
-  delete bbRuntimeOnSuspend;
-  delete bbRuntimeOnResume;
-  return true;
+	delete bbRuntimeOnSuspend;
+	delete bbRuntimeOnResume;
+	return true;
 }

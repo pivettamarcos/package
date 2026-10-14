@@ -130,6 +130,15 @@ ELSEIF(BB_PLATFORM MATCHES ovr)
 ELSEIF(BB_PLATFORM MATCHES emscripten)
   set (BB_EMSCRIPTEN true)
   add_definitions(-DBB_EMSCRIPTEN)
+  # WebGPU render backend (graphics.webgpu/blitz3d.webgpu instead of the GL
+  # modules as the *active* driver; the GL modules stay linked). OFF keeps the
+  # WebGL build byte-identical - see src/modules/bb/graphics.webgpu/INTEGRATION.md.
+  option(BB_WEBGPU "use the WebGPU render backend" OFF)
+  if(BB_WEBGPU)
+    add_definitions(-DBB_WEBGPU)
+  endif()
+  add_compile_options(-fwasm-exceptions)
+  add_link_options(-fwasm-exceptions)
 ELSEIF(BB_PLATFORM MATCHES nx)
   set (BB_NX true)
   add_definitions(-DBB_NX)
@@ -343,6 +352,8 @@ ENDIF ()
 set(CMAKE_UNITY_BUILD true)
 
 function(file_write_changes path src)
+  get_filename_component(path "${path}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
   set(changed true)
   if(EXISTS ${path})
     file(READ ${path} prev_src)

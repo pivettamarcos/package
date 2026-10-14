@@ -18,7 +18,7 @@ void BBCALL bbSoundPitch( BBSound *sound,bb_int_t pitch );
 void BBCALL bbSoundVolume( BBSound *sound,bb_float_t volume );
 void BBCALL bbSoundPan( BBSound *sound,bb_float_t pan );
 BBChannel * BBCALL bbPlaySound( BBSound *sound );
-BBChannel * BBCALL bbPlayMusic( BBStr *filename );
+BBChannel * BBCALL bbPlayMusic( BBStr *filename,bb_int_t mode );
 BBChannel * BBCALL bbPlayCDTrack( bb_int_t track,bb_int_t mode );
 void BBCALL bbStopChannel( BBChannel *channel );
 void BBCALL bbPauseChannel( BBChannel *channel );

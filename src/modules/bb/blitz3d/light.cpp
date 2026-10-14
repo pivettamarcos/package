@@ -19,7 +19,6 @@ type(type),range(1000),color(1.0f,1.0f,1.0f),innerAngle(0.0f),outerAngle(0.0f){
 
 Light::~Light(){
 	bbScene->freeLight( rep );
-	rep->markDirty();
 }
 
 float Light::getRange(){

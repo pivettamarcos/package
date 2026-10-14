@@ -120,6 +120,7 @@ void Brush::setFX( int fx ){
 }
 
 void Brush::setTexture( int index,const Texture &t,int n ){
+	if( index<0 || index>=BBScene::MAX_TEXTURES ) return;
 	write();
 	BBScene::RenderState &rs=rep->rs;
 
@@ -148,21 +149,16 @@ float Brush::getShininess()const{
 int Brush::getBlend()const{
 	if( rep->blend_valid ) return rep->rs.blend;
 
-	rep->blend_valid=true;	//well, it will be...
+	rep->blend_valid=true;
 
 	BBScene::RenderState &rs=rep->rs;
 
-	//alphatest
 	if( rep->texs[0].getCanvasFlags() & BBCanvas::CANVAS_TEX_MASK ){
 		rs.fx|=BBScene::FX_ALPHATEST;
 	}else{
 		rs.fx&=~BBScene::FX_ALPHATEST;
 	}
 
-	//0 = default/replace
-	//1 = alpha
-	//2 = multiply
-	//3 = add
 	if( rep->blend ){
 		if( rep->blend!=BBScene::BLEND_ALPHA ){
 			return rs.blend=rep->blend;
@@ -173,11 +169,10 @@ int Brush::getBlend()const{
 			}
 		}
 	}else if( rep->max_tex==1 && rep->texs[0].isTransparent() ){
-		//single transparent texture?
+
 		return rs.blend=BBScene::BLEND_ALPHA;
 	}
 
-	//vertex alpha or entityalpha?
 	if( (rs.fx&BBScene::FX_VERTEXALPHA) || rs.alpha<1 ){
 		return rs.blend=BBScene::BLEND_ALPHA;
 	}
@@ -190,6 +185,7 @@ int Brush::getFX()const{
 }
 
 Texture Brush::getTexture( int index )const{
+	if( index<0 || index>=BBScene::MAX_TEXTURES ) return Texture();
 	return rep->texs[index];
 }
 

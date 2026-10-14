@@ -5,7 +5,7 @@
 bool bbruntime_run( void (*pc)(),bool dbg ){
 	bb_env.debug=dbg;
 
-	if( !bbruntime_create() ) return false; // "Unable to start program";
+	if( !bbruntime_create() ) return false;
 	bool err=false;
 	try{
 		if( !bbRuntimeIdle() ) RTEX( 0 );

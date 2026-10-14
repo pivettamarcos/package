@@ -523,6 +523,8 @@ int main( int argc,char *argv[] ){
 		std::iostream asmcode( &qbuf );
 		Codegen_x86 codegen( asmcode,debug );
 #ifdef USE_LLVM
+		bbTarget32 = ( target.type=="emscripten" || target.arch=="wasm32" ||
+		               target.arch=="asmjs" || target.arch=="i686" );
 		Codegen_LLVM codegen2( debug );
 		codegen2.SetTarget( target );
 #endif

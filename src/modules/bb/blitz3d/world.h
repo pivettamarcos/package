@@ -12,14 +12,13 @@
 
 class World{
 public:
-	//collision methods
+
 	enum{
 		COLLISION_METHOD_SPHERE=1,
 		COLLISION_METHOD_POLYGON=2,
 		COLLISION_METHOD_BOX=3
 	};
 
-	//collision actions
 	enum{
 		COLLISION_RESPONSE_NONE=0,
 		COLLISION_RESPONSE_STOP=1,
@@ -48,7 +47,8 @@ private:
 
 	void collide( Object *src );
 	void render( Camera *c,Mirror *m );
-	void render( Model *m,const RenderContext &rc );
+	void render( Model *m,const RenderContext &rc,bool defer=false );
+	void flushOpaque();
 	void flushTransparent();
 
 };

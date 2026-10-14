@@ -17,7 +17,7 @@ TNode *ObjectHandleNode::translate( Codegen *g ){
 
 #ifdef USE_LLVM
 llvm::Value *ObjectHandleNode::translate2( Codegen_LLVM *g ){
-	auto ty=llvm::Type::getInt64Ty( *g->context );
+	auto ty=g->intTy;
 	auto t=g->CastToObjPtr( expr->translate2( g ) );
 	return g->CallIntrinsic( "_bbObjToHandle",ty,1,t );
 }

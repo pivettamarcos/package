@@ -18,6 +18,10 @@ BBMODULE_LINK( math ){
 	rtSym( "#Exp#n","bbExp",bbExp );
 	rtSym( "#Log#x","bbLog",bbLog );
 	rtSym( "#Log10#x","bbLog10",bbLog10 );
+	rtSym( "#Min#n#m","bbMin",bbMin );
+	rtSym( "#Max#n#m","bbMax",bbMax );
+	rtSym( "#Clamp#v#lo#hi","bbClamp",bbClamp );
+	rtSym( "%IsNaN#n","bbIsNaN",bbIsNaN );
 	rtSym( "#Rnd#from#to=0","bbRnd",bbRnd );
 	rtSym( "%Rand%from%to=1","bbRand",bbRand );
 	rtSym( "SeedRnd%seed","bbSeedRnd",bbSeedRnd );

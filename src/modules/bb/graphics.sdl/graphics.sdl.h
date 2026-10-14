@@ -38,22 +38,17 @@ public:
 
 	void resize();
 
-	// graphics
 	void backup();
 	bool restore();
 
-	//MANIPULATORS
 	void vwait();
 
-	//SPECIAL!
 	void copy( BBCanvas *dest,int dx,int dy,int dw,int dh,BBCanvas *src,int sx,int sy,int sw,int sh );
 
-  //NEW! Gamma control!
 	void setGamma( int r,int g,int b,float dr,float dg,float db );
 	void getGamma( int r,int g,int b,float *dr,float *dg,float *db );
 	void updateGamma( bool calibrate );
 
-	//ACCESSORS
 	int getWidth()const;
 	int getHeight()const;
 	int getLogicalWidth()const;

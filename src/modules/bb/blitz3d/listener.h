@@ -10,11 +10,9 @@ public:
 	Listener( const Listener &t );
 	~Listener();
 
-	//Entity interface
 	Entity *clone(){ return d_new Listener( *this ); }
 	Listener *getListener(){ return this; }
 
-	//Listener interface
 	void renderListener();
 
 private:

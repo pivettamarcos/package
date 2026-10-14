@@ -2,10 +2,9 @@
 #include <bb/graphics/graphics.h>
 #include "std.h"
 #include <queue>
+#include <algorithm>
 #include "world.h"
 
-//0=tris compared for collision
-//1=max proj err of terrain
 float stats3d[10];
 
 extern BBScene *bbScene;
@@ -25,8 +24,6 @@ static void enumVisible(){
 		e->enumVisible( _visible );
 	}
 }
-
-/******************************* Update *******************************/
 
 static std::vector<Object*> _objsByType[1000];
 
@@ -100,7 +97,6 @@ bool World::checkLOS( Object *src,Object *dest ){
 
 	enumEnabled();
 
-	Object *coll_obj=0;
 	Collision curr_coll;
 
 	Line line( src->getWorldPosition(),dest->getWorldPosition()-src->getWorldPosition() );
@@ -141,9 +137,6 @@ Object *World::traceRay( const Line &line,float radius,ObjCollision *curr_coll )
 	return coll_obj;
 }
 
-//
-// NEW VERSION
-//
 void World::collide( Object *src ){
 
 	static const int MAX_HITS=10;
@@ -224,9 +217,7 @@ void World::collide( Object *src ){
 		}
 		if( !coll_obj ) break;
 
-		//register collision
 		if( ++hits==MAX_HITS ){
-//			exit(0);
 			break;
 		}
 
@@ -237,8 +228,7 @@ void World::collide( Object *src ){
 		coll_plane.d-=COLLISION_EPSILON;
 		coll.time=coll_plane.t_intersect( coll_line );
 
-		if( coll.time>0 ){// && fabs(coll.normal.dot( coll_line.d ))>EPSILON ){
-			//update source position - ONLY IF AHEAD!
+		if( coll.time>0 ){
 			sv=coll_line*coll.time;
 			td*=1-coll.time;
 			td_xz*=1-coll.time;
@@ -249,7 +239,6 @@ void World::collide( Object *src ){
 			break;
 		}
 
-		//find nearest point on plane to dest
 		Vector nv=coll_plane.nearest( dv );
 
 		if( n_hit==0 ){
@@ -260,8 +249,6 @@ void World::collide( Object *src ){
 			}else if( fabs( planes[0].n.dot( coll_plane.n ) )<1-EPSILON ){
 				dv=coll_plane.intersect( planes[0] ).nearest( dv );
 			}else{
-				//SQUISHED!
-				//exit(0);
 				hits=MAX_HITS;break;
 			}
 		}else if( planes[0].distance(nv)>=0 && planes[1].distance(nv)>=0 ){
@@ -272,7 +259,6 @@ void World::collide( Object *src ){
 
 		Vector dd( dv-sv );
 
-		//going behind initial direction? really necessary?
 		if( dd.dot( dir )<=0 ){ dv=sv;break; }
 
 		if( coll_info->response==COLLISION_RESPONSE_SLIDE ){
@@ -299,169 +285,6 @@ void World::collide( Object *src ){
 		}
 	}
 }
-
-/*
-//
-// OLD VERSION
-//
-void World::collide( Object *src ){
-
-	static const int MAX_HITS=100;
-
-	Vector dv=src->getWorldTform().v;
-	Vector sv=src->getPrevWorldTform().v;
-
-	if( sv==dv ){
-		if( dv.x!=sv.x || dv.y!=sv.y || dv.z!=sv.z ){
-			src->setWorldPosition( sv );
-		}
-		return;
-	}
-
-	Vector panic=sv;
-
-	static Transform y_tform;
-
-	const Vector &radii=src->getCollisionRadii();
-
-	float radius=radii.x,inv_y_scale;
-	float y_scale=inv_y_scale=y_tform.m.j.y=1;
-
-	if( radii.x!=radii.y ){
-		y_scale=y_tform.m.j.y=radius/radii.y;
-		inv_y_scale=1/y_scale;
-		sv.y*=y_scale;
-		dv.y*=y_scale;
-	}
-
-	int n_hit=0;
-	Plane planes[2];
-	Line coll_line( sv,dv-sv );
-	Vector dir=coll_line.d;
-
-	float td=coll_line.d.length();
-	float td_xz=Vector( coll_line.d.x,0,coll_line.d.z ).length();
-
-	const vector<CollInfo> &collinfos=_collInfo[src->getCollisionType()];
-
-	int hits=0;
-	while( hits<MAX_HITS ){
-
-		Collision coll;
-		Object *coll_obj=0;
-		vector<CollInfo>::const_iterator coll_it,coll_info;
-
-		for( coll_it=collinfos.begin();coll_it!=collinfos.end();++coll_it ){
-
-			vector<Object*>::const_iterator dst_it;
-
-			const vector<Object*> &dst_objs=_objsByType[coll_it->dst_type];
-
-			for( dst_it=dst_objs.begin();dst_it!=dst_objs.end();++dst_it ){
-
-				Object *dst=*dst_it;
-
-				if( src==dst ) continue;
-
-				const Transform &dst_tform=dst->getPrevWorldTform();
-
-				if( y_scale==1 ){
-
-					if( hitTest(
-					coll_line,radius,dst,dst_tform,
-					coll_it->method,&coll ) ){
-						coll_obj=dst;
-						coll_info=coll_it;
-					}
-				}else{
-
-					if( hitTest(
-					coll_line,radius,dst,y_tform * dst_tform,
-					coll_it->method,&coll ) ){
-						coll_obj=dst;
-						coll_info=coll_it;
-					}
-				}
-			}
-		}
-		if( !coll_obj ) break;
-
-		//register collision
-		++hits;
-		collided( src,coll_obj,coll_line,coll,inv_y_scale );
-
-		//create collision plane
-		Plane coll_plane( coll_line*coll.time,coll.normal );
-
-		//move plane out a bit (cough)
-		coll_plane.d-=.001f;
-
-		if( fabs(coll.normal.dot( coll_line.d ))>EPSILON ){
-			float t=coll_plane.t_intersect( coll_line );
-			//update source position - ONLY IF AHEAD!
-			if( t>0 ){
-				sv=coll_line*t;
-				td*=1-coll.time;
-				td_xz*=1-coll.time;
-			}
-		}
-
-		//STOP?
-		if( coll_info->response==COLLISION_RESPONSE_STOP ){
-			dv=sv;
-			break;
-		}
-
-		//find nearest point on plane to dest
-		Vector nv=coll_plane.nearest( dv );
-
-		//SLIDE!
-		if( n_hit==0 ){
-			dv=nv;
-		}else if( n_hit==1 ){
-			if( planes[0].distance(nv)>=0 ){
-				dv=nv;n_hit=0;
-			}else if( fabs( planes[0].n.dot( coll_plane.n ) )<1-EPSILON ){
-				dv=coll_plane.intersect( planes[0] ).nearest( dv );
-			}else{
-				hits=MAX_HITS;break;
-			}
-		}else if( planes[0].distance(nv)>=0 && planes[1].distance(nv)>=0 ){
-			dv=nv;n_hit=0;
-		}else{
-			dv=sv;break;
-		}
-
-		Vector dd( dv-sv );
-
-		//going behind initial direction? really necessary?
-		if( dd.dot( dir )<=0 ){ dv=sv;break; }
-
-		if( coll_info->response==COLLISION_RESPONSE_SLIDE ){
-			float d=dd.length();
-			if( d<=EPSILON ){ dv=sv;break; }
-			if( d>td ) dd*=td/d;
-		}else if( coll_info->response==COLLISION_RESPONSE_SLIDEXZ ){
-			float d=Vector( dd.x,0,dd.z ).length();
-			if( d<=EPSILON ){ dv=sv;break; }
-			if( d>td_xz ) dd*=td_xz/d;
-		}
-
-		coll_line.o=sv;
-		coll_line.d=dd;dv=sv+dd;
-		planes[n_hit++]=coll_plane;
-	}
-
-	if( hits ){
-		if( hits<MAX_HITS ){
-			dv.y*=inv_y_scale;
-			src->setWorldPosition( dv );
-		}else{
-			src->setWorldPosition( panic );
-		}
-	}
-}
-*/
 
 void World::update( float elapsed ){
 
@@ -497,9 +320,7 @@ void World::update( float elapsed ){
 	}
 }
 
-/****************************** Render *********************************/
-
-static Transform cam_tform;		//current camera transform
+static Transform cam_tform;
 
 static std::vector<BBLightRep*> _lights;
 static std::vector<Mirror*> _mirrors;
@@ -521,6 +342,8 @@ struct TransComp{
 
 static std::vector<Model*> ord_mods,unord_mods;
 
+static std::vector<Model::Draw> opaque_draws;
+
 static std::priority_queue<Model*,std::vector<Model*>,OrderComp> ord_que;
 
 static std::priority_queue<Camera*,std::vector<Camera*>,OrderComp> cam_que;
@@ -538,7 +361,6 @@ void World::capture(){
 }
 
 void World::render( float tween ){
-	//set render tweens, and build ordered and unordered model lists...
 	ord_mods.clear();
 	unord_mods.clear();
 
@@ -567,8 +389,6 @@ void World::render( float tween ){
 
 	for( ;ord_que.size();ord_que.pop() ) ord_mods.push_back( ord_que.top() );
 
-//	_bbDebugLog( "RenderWorld" );
-
 	if( !bbScene->begin( _lights ) ) return;
 
 	BBCanvas *org_canvas=gx_canvas;
@@ -578,7 +398,6 @@ void World::render( float tween ){
 
 		BBCanvas *canvas=cam->getCanvas();
 		if( canvas==0 ) canvas=org_canvas;
-		// debugCanvas( canvas );
 
 		if( gx_canvas!=canvas ){
 			if( gx_canvas ) gx_canvas->unset();
@@ -604,8 +423,6 @@ void World::render( float tween ){
 
 	bbScene->end();
 
-//	_bbDebugLog( "End RenderWorld" );
-
 	std::vector<Listener*>::const_iterator lis_it;
 	for( lis_it=_listeners.begin();lis_it!=_listeners.end();++lis_it ){
 		(*lis_it)->renderListener();
@@ -623,13 +440,10 @@ void World::render( Camera *cam,Mirror *mirror ){
 		bbScene->setFlippedTris( false );
 	}
 
-	//set camera matrix
 	bbScene->setViewMatrix( (BBScene::Matrix*)&(-cam_tform) );
 
-	//initialize render context
 	RenderContext rc( cam_tform,cam->getFrustum(),mirror!=0 );
 
-	//draw everything in order
 	unsigned int ord=0;
 	bbScene->setZMode( BBScene::ZMODE_DISABLE );
 	while( ord<ord_mods.size() && ord_mods[ord]->getOrder()>0 ){
@@ -643,8 +457,9 @@ void World::render( Camera *cam,Mirror *mirror ){
 	for( unsigned int k=0;k<unord_mods.size();++k ){
 		Model *mod=unord_mods[k];
 		if( !mod->doAutoFade( cam_tform.v ) ) continue;
-		render( mod,rc );
+		render( mod,rc,true );
 	}
+	flushOpaque();
 	bbScene->setZMode( BBScene::ZMODE_CMPONLY );
 	flushTransparent();
 
@@ -657,22 +472,46 @@ void World::render( Camera *cam,Mirror *mirror ){
 	}
 }
 
-void World::render( Model *mod,const RenderContext &rc ){
+void World::render( Model *mod,const RenderContext &rc,bool defer ){
 
 	bool trans=mod->render( rc );
 
 	if( mod->queueSize( Model::QUEUE_OPAQUE ) ){
-		if( mod->getRenderSpace()==Model::RENDER_SPACE_LOCAL ){
-			bbScene->setWorldMatrix( (BBScene::Matrix*)&mod->getRenderTform() );
+		if( defer&&mod->deferrable() ){
+			mod->takeQueue( Model::QUEUE_OPAQUE,opaque_draws );
 		}else{
-			bbScene->setWorldMatrix( 0 );
+			if( mod->getRenderSpace()==Model::RENDER_SPACE_LOCAL ){
+				bbScene->setWorldMatrix( (BBScene::Matrix*)&mod->getRenderTform() );
+			}else{
+				bbScene->setWorldMatrix( 0 );
+			}
+			mod->renderQueue( Model::QUEUE_OPAQUE );
 		}
-		mod->renderQueue( Model::QUEUE_OPAQUE );
 	}
 
 	if( trans || mod->queueSize( Model::QUEUE_TRANSPARENT ) ){
 		transparents.push( mod );
 	}
+}
+
+void World::flushOpaque(){
+
+	std::stable_sort( opaque_draws.begin(),opaque_draws.end() );
+
+	Model *current=0;
+	for( size_t k=0;k<opaque_draws.size();++k ){
+		const Model::Draw &d=opaque_draws[k];
+		if( d.model!=current ){
+			current=d.model;
+			if( current->getRenderSpace()==Model::RENDER_SPACE_LOCAL ){
+				bbScene->setWorldMatrix( (BBScene::Matrix*)&current->getRenderTform() );
+			}else{
+				bbScene->setWorldMatrix( 0 );
+			}
+		}
+		Model::drawQueued( d );
+	}
+	opaque_draws.clear();
 }
 
 void World::flushTransparent(){

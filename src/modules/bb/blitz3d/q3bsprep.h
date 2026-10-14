@@ -12,7 +12,7 @@ struct Q3BSPNode;
 
 class Q3BSPRep{
 public:
-	//constructor
+
 	Q3BSPRep( const std::string &f,float gamma_adj );
 	~Q3BSPRep();
 

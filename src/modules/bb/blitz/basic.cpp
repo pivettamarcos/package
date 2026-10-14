@@ -10,34 +10,22 @@
 #include <cstring>
 #include <map>
 
-//how many strings allocated
 static int stringCnt;
 
-//how many objects new'd but not deleted
 static int objCnt;
 
-//how many objects deleted but not released
 static int unrelObjCnt;
 
-//how many objects to alloc per block
 static const int OBJ_NEW_INC=512;
 
-//how many strings to alloc per block
 static const int STR_NEW_INC=512;
 
-//current data ptr
 static BBData *dataPtr;
 
-//chunks of mem - WHAT THE FUCK WAS I ON?!?!?!?
-//static list<char*> memBlks;
-
-//strings
 static BBStr usedStrs,freeStrs;
 
-//object handle number
 static int next_handle;
 
-//object<->handle maps
 static std::map<bb_int_t,BBObj*> handle_map;
 static std::map<BBObj*,bb_int_t> object_map;
 
@@ -48,21 +36,10 @@ BBType _bbCStrType( BBTYPE_CSTR );
 
 static void *bbMalloc( int size ){
 	return malloc(size);
-/*
-	char *c=d_new char[ size ];
-	memBlks.push_back( c );
-	return c;
-*/
 }
 
 static void bbFree( void *q ){
 	free(q);
-/*
-	if( !q ) return;
-	char *c=(char*)q;
-	memBlks.remove( c );
-	delete [] c;
-*/
 }
 
 static void removeStr( BBStr *str ){
@@ -326,9 +303,6 @@ void BBCALL _bbObjDeleteEach( BBObjType *type ){
 	}
 }
 
-extern void BBCALL _bbDebugLog( BBStr *t );
-extern void BBCALL bbStop( );
-
 void BBCALL _bbObjRelease( BBObj *obj ){
 	if( !obj || --obj->ref_cnt ) return;
 	unlinkObj( obj );
@@ -337,7 +311,7 @@ void BBCALL _bbObjRelease( BBObj *obj ){
 }
 
 void BBCALL _bbObjStore( BBObj **var,BBObj *obj ){
-	if( obj ) ++obj->ref_cnt;	//do this first incase of self-assignment
+	if( obj ) ++obj->ref_cnt;
 	_bbObjRelease( *var );
 	*var=obj;
 }
@@ -542,19 +516,10 @@ void BBCALL bbRuntimeStats(){
 	_bbDebugLog( ("Active strings :"+itoa(stringCnt)).c_str() );
 	_bbDebugLog( ("Active objects :"+itoa(objCnt)).c_str() );
 	_bbDebugLog( ("Unreleased objs:"+itoa(unrelObjCnt)).c_str() );
-	/*
-	clog<<"Active strings:"<<stringCnt<<endl;
-	clog<<"Active objects:"<<objCnt<<endl;
-	clog<<"Unreleased Objects:"<<unrelObjCnt<<endl;
-	for( BBStr *t=usedStrs.next;t!=&usedStrs;t=t->next ){
-		clog<<"string@"<<(void*)t<<endl;
-	}
-	*/
 }
 
 BBMODULE_CREATE( blitz ){
 	next_handle=0;
-//	memBlks.clear();
 	handle_map.clear();
 	object_map.clear();
 	stringCnt=objCnt=unrelObjCnt=0;
@@ -565,7 +530,6 @@ BBMODULE_CREATE( blitz ){
 
 BBMODULE_DESTROY( blitz ){
 	while( usedStrs.next!=&usedStrs ) delete usedStrs.next;
-//	while( memBlks.size() ) bbFree( memBlks.back() );
 	handle_map.clear();
 	object_map.clear();
 	return true;
